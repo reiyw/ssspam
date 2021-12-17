@@ -13,10 +13,12 @@ use std::{
     collections::HashMap,
     convert::TryInto,
     env,
+    path::PathBuf,
     sync::{Arc, Weak},
 };
 
 use dotenv::dotenv;
+use glob::glob;
 
 use serenity::{
     async_trait,
@@ -53,6 +55,64 @@ impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
     }
+
+    async fn message(&self, ctx: Context, msg: Message) {
+        let guild = msg.guild(&ctx.cache).await.unwrap();
+        let guild_id = guild.id;
+
+        let manager = songbird::get(&ctx)
+            .await
+            .expect("Songbird Voice client placed in at initialisation.")
+            .clone();
+
+        if let Some(handler_lock) = manager.get(guild_id) {
+            let mut handler = handler_lock.lock().await;
+
+            let sources_lock = ctx
+                .data
+                .read()
+                .await
+                .get::<SoundStore>()
+                .cloned()
+                .expect("Sound cache was installed at startup.");
+            let mut sources = sources_lock.lock().await;
+
+            let paths_lock = ctx
+                .data
+                .read()
+                .await
+                .get::<PathStore>()
+                .cloned()
+                .expect("Path cache was installed at startup.");
+            let paths = paths_lock.lock().await;
+
+            let mut iter = msg.content.split_ascii_whitespace();
+            if let Some(sound_name) = iter.next() {
+                if let Some(source) = sources.get(sound_name) {
+                    let _sound = handler.play_source(source.into());
+                } else {
+                    if let Some(path) = paths.get(sound_name) {
+                        let mem = Memory::new(
+                            input::ffmpeg(path)
+                                .await
+                                .expect("File should be in root folder."),
+                        )
+                        .expect("These parameters are well-defined.");
+                        let _ = mem.raw.spawn_loader();
+                        // let song_src = Compressed::new(
+                        //     input::ffmpeg(path).await.expect("Link may be dead."),
+                        //     Bitrate::BitsPerSecond(128),
+                        // )
+                        // .expect("These parameters are well-defined.");
+                        // let _ = song_src.raw.spawn_loader();
+                        let source = CachedSound::Uncompressed(mem);
+                        let _handle = handler.play_source((&source).into());
+                        sources.insert(sound_name.into(), source);
+                    }
+                }
+            }
+        }
+    }
 }
 
 enum CachedSound {
@@ -79,15 +139,21 @@ impl TypeMapKey for SoundStore {
     type Value = Arc<Mutex<HashMap<String, CachedSound>>>;
 }
 
+struct PathStore;
+
+impl TypeMapKey for PathStore {
+    type Value = Arc<Mutex<HashMap<String, PathBuf>>>;
+}
+
 #[group]
 #[commands(deafen, join, leave, mute, ting, undeafen, unmute)]
 struct General;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    dotenv()?;
-
     tracing_subscriber::fmt::init();
+
+    dotenv()?;
 
     // Configure the client with your Discord bot token in the environment.
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
@@ -103,64 +169,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .expect("Err creating client");
 
-    // Obtain a lock to the data owned by the client, and insert the client's
-    // voice manager into it. This allows the voice manager to be accessible by
-    // event handlers and framework commands.
     {
         let mut data = client.data.write().await;
 
-        // Loading the audio ahead of time.
-        let mut audio_map = HashMap::new();
+        let mut path_map = HashMap::new();
 
-        // Creation of an in-memory source.
-        //
-        // This is a small sound effect, so storing the whole thing is relatively cheap.
-        //
-        // `spawn_loader` creates a new thread which works to copy all the audio into memory
-        // ahead of time. We do this in both cases to ensure optimal performance for the audio
-        // core.
-        let ting_src = Memory::new(
-            input::ffmpeg("ting.wav")
-                .await
-                .expect("File should be in root folder."),
-        )
-        .expect("These parameters are well-defined.");
-        let _ = ting_src.raw.spawn_loader();
-        audio_map.insert("ting".into(), CachedSound::Uncompressed(ting_src));
+        for entry in glob(&format!("{}/*.mp3", env::var("SOUND_DIR")?))? {
+            if let Ok(path) = entry {
+                path_map.insert(
+                    path.file_stem().unwrap().to_str().unwrap().to_string(),
+                    path,
+                );
+            }
+        }
 
-        // Another short sting, to show where each loop occurs.
-        let loop_src = Memory::new(
-            input::ffmpeg("loop.wav")
-                .await
-                .expect("File should be in root folder."),
-        )
-        .expect("These parameters are well-defined.");
-        let _ = loop_src.raw.spawn_loader();
-        audio_map.insert("loop".into(), CachedSound::Uncompressed(loop_src));
+        data.insert::<PathStore>(Arc::new(Mutex::new(path_map)));
+    }
 
-        // Creation of a compressed source.
-        //
-        // This is a full song, making this a much less memory-heavy choice.
-        //
-        // Music by Cloudkicker, used under CC BY-SC-SA 3.0 (https://creativecommons.org/licenses/by-nc-sa/3.0/).
-        let song_src = Compressed::new(
-            input::ffmpeg("Cloudkicker_-_Loops_-_22_2011_07.mp3")
-                .await
-                .expect("Link may be dead."),
-            Bitrate::BitsPerSecond(128_000),
-        )
-        .expect("These parameters are well-defined.");
-        let _ = song_src.raw.spawn_loader();
-        audio_map.insert("song".into(), CachedSound::Compressed(song_src));
-
-        data.insert::<SoundStore>(Arc::new(Mutex::new(audio_map)));
+    {
+        let mut data = client.data.write().await;
+        data.insert::<SoundStore>(Arc::new(Mutex::new(HashMap::new())));
     }
 
     let _ = client
         .start()
         .await
         .map_err(|why| println!("Client ended: {:?}", why));
-    
+
     Ok(())
 }
 
@@ -230,40 +265,11 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 
     let (handler_lock, success_reader) = manager.join(guild_id, connect_to).await;
 
-    let call_lock_for_evt = Arc::downgrade(&handler_lock);
-
     if let Ok(_reader) = success_reader {
-        let mut handler = handler_lock.lock().await;
         check_msg(
             msg.channel_id
                 .say(&ctx.http, &format!("Joined {}", connect_to.mention()))
                 .await,
-        );
-
-        let sources_lock = ctx
-            .data
-            .read()
-            .await
-            .get::<SoundStore>()
-            .cloned()
-            .expect("Sound cache was installed at startup.");
-        let sources_lock_for_evt = sources_lock.clone();
-        let sources = sources_lock.lock().await;
-        let source = sources
-            .get("song")
-            .expect("Handle placed into cache at startup.");
-
-        let song = handler.play_source(source.into());
-        let _ = song.set_volume(1.0);
-        let _ = song.enable_loop();
-
-        // Play a guitar chord whenever the main backing track loops.
-        let _ = song.add_event(
-            Event::Track(TrackEvent::Loop),
-            LoopPlaySound {
-                call_lock: call_lock_for_evt,
-                sources: sources_lock_for_evt,
-            },
         );
     } else {
         check_msg(
@@ -391,14 +397,49 @@ async fn ting(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
             .get::<SoundStore>()
             .cloned()
             .expect("Sound cache was installed at startup.");
-        let sources = sources_lock.lock().await;
-        let source = sources
-            .get("ting")
-            .expect("Handle placed into cache at startup.");
+        let mut sources = sources_lock.lock().await;
 
-        let _sound = handler.play_source(source.into());
+        let paths_lock = ctx
+            .data
+            .read()
+            .await
+            .get::<PathStore>()
+            .cloned()
+            .expect("Path cache was installed at startup.");
+        let paths = paths_lock.lock().await;
 
-        check_msg(msg.channel_id.say(&ctx.http, "Ting!").await);
+        let mut iter = msg.content.split_ascii_whitespace();
+        iter.next();
+        if let Some(sound_name) = iter.next() {
+            if let Some(source) = sources.get(sound_name) {
+                let _sound = handler.play_source(source.into());
+            } else {
+                if let Some(path) = paths.get(sound_name) {
+                    let mem = Memory::new(
+                        input::ffmpeg(path)
+                            .await
+                            .expect("File should be in root folder."),
+                    )
+                    .expect("These parameters are well-defined.");
+                    let _ = mem.raw.spawn_loader();
+                    // let song_src = Compressed::new(
+                    //     input::ffmpeg(path).await.expect("Link may be dead."),
+                    //     Bitrate::BitsPerSecond(128),
+                    // )
+                    // .expect("These parameters are well-defined.");
+                    // let _ = song_src.raw.spawn_loader();
+                    let source = CachedSound::Uncompressed(mem);
+                    let _handle = handler.play_source((&source).into());
+                    sources.insert(sound_name.into(), source);
+                }
+            }
+        }
+
+        // let source = sources
+        //     .get("ting")
+        //     .expect("Handle placed into cache at startup.");
+
+        // let _sound = handler.play_source(source.into());
     } else {
         check_msg(
             msg.channel_id
