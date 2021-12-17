@@ -103,12 +103,6 @@ impl EventHandler for Handler {
                         )
                         .expect("These parameters are well-defined.");
                         let _ = mem.raw.spawn_loader();
-                        // let song_src = Compressed::new(
-                        //     input::ffmpeg(path).await.expect("Link may be dead."),
-                        //     Bitrate::BitsPerSecond(128),
-                        // )
-                        // .expect("These parameters are well-defined.");
-                        // let _ = song_src.raw.spawn_loader();
                         let source = CachedSound::Uncompressed(mem);
                         // let handle = handler.play_source((&source).into());
                         let (mut audio, _audio_handle) = create_player((&source).into());
