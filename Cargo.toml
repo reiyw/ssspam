@@ -14,7 +14,7 @@ tracing-futures = "0.2"
 
 [dependencies.serenity]
 version = "0.10"
-features = ["client", "standard_framework", "voice"]
+features = ["cache", "framework", "standard_framework", "voice"]
 
 [dependencies.tokio]
 version = "1.15"

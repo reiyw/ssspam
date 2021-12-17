@@ -1,17 +1,26 @@
-use std::env;
-
-// This trait adds the `register_songbird` and `register_songbird_with` methods
-// to the client builder below, making it easy to install this voice client.
-// The voice client can be retrieved in any command using `songbird::get(ctx).await`.
-use songbird::SerenityInit;
-
-// Import the `Context` to handle commands.
-use serenity::client::Context;
+//! Example demonstrating how to store and convert audio streams which you
+//! either want to reuse between servers, or to seek/loop on. See `join`, and `ting`.
+//!
+//! Requires the "cache", "standard_framework", and "voice" features be enabled in your
+//! Cargo.toml, like so:
+//!
+//! ```toml
+//! [dependencies.serenity]
+//! git = "https://github.com/serenity-rs/serenity.git"
+//! features = ["cache", "framework", "standard_framework", "voice"]
+//! ```
+use std::{
+    collections::HashMap,
+    convert::TryInto,
+    env,
+    sync::{Arc, Weak},
+};
 
 use dotenv::dotenv;
+
 use serenity::{
     async_trait,
-    client::{Client, EventHandler},
+    client::{Client, Context, EventHandler},
     framework::{
         standard::{
             macros::{command, group},
@@ -19,9 +28,23 @@ use serenity::{
         },
         StandardFramework,
     },
-    model::{channel::Message, gateway::Ready},
+    model::{channel::Message, gateway::Ready, misc::Mentionable},
+    prelude::Mutex,
     Result as SerenityResult,
 };
+
+use songbird::{
+    driver::Bitrate,
+    input::{
+        self,
+        cached::{Compressed, Memory},
+        Input,
+    },
+    Call, Event, EventContext, EventHandler as VoiceEventHandler, SerenityInit, TrackEvent,
+};
+
+// This imports `typemap`'s `Key` as `TypeMapKey`.
+use serenity::prelude::*;
 
 struct Handler;
 
@@ -32,15 +55,39 @@ impl EventHandler for Handler {
     }
 }
 
+enum CachedSound {
+    Compressed(Compressed),
+    Uncompressed(Memory),
+}
+
+impl From<&CachedSound> for Input {
+    fn from(obj: &CachedSound) -> Self {
+        use CachedSound::*;
+        match obj {
+            Compressed(c) => c.new_handle().into(),
+            Uncompressed(u) => u
+                .new_handle()
+                .try_into()
+                .expect("Failed to create decoder for Memory source."),
+        }
+    }
+}
+
+struct SoundStore;
+
+impl TypeMapKey for SoundStore {
+    type Value = Arc<Mutex<HashMap<String, CachedSound>>>;
+}
+
 #[group]
-#[commands(deafen, join, leave, mute, play, ping, undeafen, unmute)]
+#[commands(deafen, join, leave, mute, ting, undeafen, unmute)]
 struct General;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
-
     dotenv()?;
+
+    tracing_subscriber::fmt::init();
 
     // Configure the client with your Discord bot token in the environment.
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
@@ -56,16 +103,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .expect("Err creating client");
 
-    tokio::spawn(async move {
-        let _ = client
-            .start()
-            .await
-            .map_err(|why| println!("Client ended: {:?}", why));
-    });
+    // Obtain a lock to the data owned by the client, and insert the client's
+    // voice manager into it. This allows the voice manager to be accessible by
+    // event handlers and framework commands.
+    {
+        let mut data = client.data.write().await;
 
-    tokio::signal::ctrl_c().await?;
-    println!("Received Ctrl-C, shutting down.");
+        // Loading the audio ahead of time.
+        let mut audio_map = HashMap::new();
 
+        // Creation of an in-memory source.
+        //
+        // This is a small sound effect, so storing the whole thing is relatively cheap.
+        //
+        // `spawn_loader` creates a new thread which works to copy all the audio into memory
+        // ahead of time. We do this in both cases to ensure optimal performance for the audio
+        // core.
+        let ting_src = Memory::new(
+            input::ffmpeg("ting.wav")
+                .await
+                .expect("File should be in root folder."),
+        )
+        .expect("These parameters are well-defined.");
+        let _ = ting_src.raw.spawn_loader();
+        audio_map.insert("ting".into(), CachedSound::Uncompressed(ting_src));
+
+        // Another short sting, to show where each loop occurs.
+        let loop_src = Memory::new(
+            input::ffmpeg("loop.wav")
+                .await
+                .expect("File should be in root folder."),
+        )
+        .expect("These parameters are well-defined.");
+        let _ = loop_src.raw.spawn_loader();
+        audio_map.insert("loop".into(), CachedSound::Uncompressed(loop_src));
+
+        // Creation of a compressed source.
+        //
+        // This is a full song, making this a much less memory-heavy choice.
+        //
+        // Music by Cloudkicker, used under CC BY-SC-SA 3.0 (https://creativecommons.org/licenses/by-nc-sa/3.0/).
+        let song_src = Compressed::new(
+            input::ffmpeg("Cloudkicker_-_Loops_-_22_2011_07.mp3")
+                .await
+                .expect("Link may be dead."),
+            Bitrate::BitsPerSecond(128_000),
+        )
+        .expect("These parameters are well-defined.");
+        let _ = song_src.raw.spawn_loader();
+        audio_map.insert("song".into(), CachedSound::Compressed(song_src));
+
+        data.insert::<SoundStore>(Arc::new(Mutex::new(audio_map)));
+    }
+
+    let _ = client
+        .start()
+        .await
+        .map_err(|why| println!("Client ended: {:?}", why));
+    
     Ok(())
 }
 
@@ -133,9 +228,78 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
 
-    let _handler = manager.join(guild_id, connect_to).await;
+    let (handler_lock, success_reader) = manager.join(guild_id, connect_to).await;
+
+    let call_lock_for_evt = Arc::downgrade(&handler_lock);
+
+    if let Ok(_reader) = success_reader {
+        let mut handler = handler_lock.lock().await;
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, &format!("Joined {}", connect_to.mention()))
+                .await,
+        );
+
+        let sources_lock = ctx
+            .data
+            .read()
+            .await
+            .get::<SoundStore>()
+            .cloned()
+            .expect("Sound cache was installed at startup.");
+        let sources_lock_for_evt = sources_lock.clone();
+        let sources = sources_lock.lock().await;
+        let source = sources
+            .get("song")
+            .expect("Handle placed into cache at startup.");
+
+        let song = handler.play_source(source.into());
+        let _ = song.set_volume(1.0);
+        let _ = song.enable_loop();
+
+        // Play a guitar chord whenever the main backing track loops.
+        let _ = song.add_event(
+            Event::Track(TrackEvent::Loop),
+            LoopPlaySound {
+                call_lock: call_lock_for_evt,
+                sources: sources_lock_for_evt,
+            },
+        );
+    } else {
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, "Error joining the channel")
+                .await,
+        );
+    }
 
     Ok(())
+}
+
+struct LoopPlaySound {
+    call_lock: Weak<Mutex<Call>>,
+    sources: Arc<Mutex<HashMap<String, CachedSound>>>,
+}
+
+#[async_trait]
+impl VoiceEventHandler for LoopPlaySound {
+    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
+        if let Some(call_lock) = self.call_lock.upgrade() {
+            let src = {
+                let sources = self.sources.lock().await;
+                sources
+                    .get("loop")
+                    .expect("Handle placed into cache at startup.")
+                    .into()
+            };
+
+            let mut handler = call_lock.lock().await;
+            let sound = handler.play_source(src);
+            let _ = sound.set_volume(0.5);
+        }
+
+        None
+    }
 }
 
 #[command]
@@ -207,38 +371,8 @@ async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 #[command]
-async fn ping(context: &Context, msg: &Message) -> CommandResult {
-    check_msg(msg.channel_id.say(&context.http, "Pong!").await);
-
-    Ok(())
-}
-
-#[command]
 #[only_in(guilds)]
-async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let url = match args.single::<String>() {
-        Ok(url) => url,
-        Err(_) => {
-            check_msg(
-                msg.channel_id
-                    .say(&ctx.http, "Must provide a URL to a video or audio")
-                    .await,
-            );
-
-            return Ok(());
-        }
-    };
-
-    if !url.starts_with("http") {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, "Must provide a valid URL")
-                .await,
-        );
-
-        return Ok(());
-    }
-
+async fn ting(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
@@ -250,20 +384,21 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
 
-        let source = match songbird::ytdl(&url).await {
-            Ok(source) => source,
-            Err(why) => {
-                println!("Err starting source: {:?}", why);
+        let sources_lock = ctx
+            .data
+            .read()
+            .await
+            .get::<SoundStore>()
+            .cloned()
+            .expect("Sound cache was installed at startup.");
+        let sources = sources_lock.lock().await;
+        let source = sources
+            .get("ting")
+            .expect("Handle placed into cache at startup.");
 
-                check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
+        let _sound = handler.play_source(source.into());
 
-                return Ok(());
-            }
-        };
-
-        handler.play_source(source);
-
-        check_msg(msg.channel_id.say(&ctx.http, "Playing song").await);
+        check_msg(msg.channel_id.say(&ctx.http, "Ting!").await);
     } else {
         check_msg(
             msg.channel_id
@@ -288,6 +423,7 @@ async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
+
         if let Err(e) = handler.deafen(false).await {
             check_msg(
                 msg.channel_id
@@ -313,7 +449,6 @@ async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
 async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
-
     let manager = songbird::get(ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")
@@ -321,6 +456,7 @@ async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
+
         if let Err(e) = handler.mute(false).await {
             check_msg(
                 msg.channel_id
