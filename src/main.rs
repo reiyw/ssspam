@@ -44,6 +44,7 @@ use songbird::{
     },
     Call, Event, EventContext, EventHandler as VoiceEventHandler, SerenityInit, TrackEvent,
 };
+use songbird::{driver::Driver, ffmpeg, tracks::create_player};
 
 // This imports `typemap`'s `Key` as `TypeMapKey`.
 use serenity::prelude::*;
@@ -89,7 +90,10 @@ impl EventHandler for Handler {
             let mut iter = msg.content.split_ascii_whitespace();
             if let Some(sound_name) = iter.next() {
                 if let Some(source) = sources.get(sound_name) {
-                    let _sound = handler.play_source(source.into());
+                    // let handle = handler.play_source(source.into());
+                    let (mut audio, _audio_handle) = create_player(source.into());
+                    audio.set_volume(0.05);
+                    handler.play_only(audio);
                 } else {
                     if let Some(path) = paths.get(sound_name) {
                         let mem = Memory::new(
@@ -106,7 +110,10 @@ impl EventHandler for Handler {
                         // .expect("These parameters are well-defined.");
                         // let _ = song_src.raw.spawn_loader();
                         let source = CachedSound::Uncompressed(mem);
-                        let _handle = handler.play_source((&source).into());
+                        // let handle = handler.play_source((&source).into());
+                        let (mut audio, _audio_handle) = create_player((&source).into());
+                        audio.set_volume(0.05);
+                        handler.play_only(audio);
                         sources.insert(sound_name.into(), source);
                     }
                 }
