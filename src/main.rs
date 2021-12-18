@@ -5,6 +5,7 @@ use dotenv::dotenv;
 use glob::glob;
 use moka::future::Cache;
 use once_cell::sync::Lazy;
+use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
 use regex::Regex;
 use serenity::{
     async_trait,
@@ -220,7 +221,7 @@ impl TypeMapKey for PathStore {
 }
 
 #[group]
-#[commands(deafen, join, leave, mute, undeafen, unmute, s)]
+#[commands(deafen, join, leave, mute, undeafen, unmute, s, r)]
 struct General;
 
 #[tokio::main]
@@ -509,5 +510,29 @@ async fn s(ctx: &Context, msg: &Message) -> CommandResult {
                 .await,
         );
     }
+    Ok(())
+}
+
+#[command]
+async fn r(ctx: &Context, msg: &Message) -> CommandResult {
+    let speed = msg
+        .content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .get(1)
+        .map(|s| s.to_owned())
+        .unwrap_or("100")
+        .parse::<u32>()
+        .unwrap_or(100);
+    let lock = SOUND_DETAILS.lock().await;
+    let names: Vec<_> = lock.keys().collect();
+    let mut rng: StdRng = SeedableRng::from_entropy();
+    if let Some(mut result) = names.choose(&mut rng).map(|r| r.to_string()) {
+        if speed != 100 {
+            result += &format!(" {}", speed);
+        }
+        check_msg(msg.channel_id.say(&ctx.http, result).await);
+    }
+
     Ok(())
 }
