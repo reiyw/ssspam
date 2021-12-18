@@ -33,13 +33,15 @@ use songbird::{
 struct SoundDetail {
     path: PathBuf,
     sample_rate_hz: u32,
+    is_stereo: bool,
 }
 
 impl SoundDetail {
-    fn new(path: PathBuf, sample_rate_hz: u32) -> Self {
+    fn new(path: PathBuf, sample_rate_hz: u32, is_stereo: bool) -> Self {
         Self {
             path,
             sample_rate_hz,
+            is_stereo,
         }
     }
 }
@@ -55,7 +57,9 @@ static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> = Lazy::new(|| 
         if data.is_err() {
             println!("invalid: {:?}", path);
         }
+
         let freqs: Counter<_> = data
+            .as_ref()
             .unwrap()
             .frames
             .iter()
@@ -63,9 +67,17 @@ static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> = Lazy::new(|| 
             .collect();
         let sample_rate_hz = freqs.most_common()[0].0 as u32;
 
+        let chan_types: Counter<_> = data
+            .unwrap()
+            .frames
+            .iter()
+            .map(|f| f.chan_type == mp3_metadata::ChannelType::SingleChannel)
+            .collect();
+        let is_stereo = !chan_types.most_common()[0].0;
+
         path_map.insert(
             path.file_stem().unwrap().to_str().unwrap().to_string(),
-            SoundDetail::new(path, sample_rate_hz),
+            SoundDetail::new(path, sample_rate_hz, is_stereo),
         );
     }
     Mutex::new(path_map)
@@ -131,7 +143,7 @@ impl EventHandler for Handler {
                                 "-f",
                                 "s16le",
                                 "-ac",
-                                "2",
+                                if detail.is_stereo { "2" } else { "1" },
                                 "-ar",
                                 "48000",
                                 "-acodec",
