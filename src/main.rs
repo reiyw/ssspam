@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, convert::TryInto, env, path::PathBuf, sync::Arc};
 
+use counter::Counter;
 use dotenv::dotenv;
 use glob::glob;
 use moka::future::Cache;
@@ -54,7 +55,13 @@ static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> = Lazy::new(|| 
         if data.is_err() {
             println!("invalid: {:?}", path);
         }
-        let sample_rate_hz = data.unwrap().frames[0].sampling_freq as u32;
+        let freqs: Counter<_> = data
+            .unwrap()
+            .frames
+            .iter()
+            .map(|f| f.sampling_freq)
+            .collect();
+        let sample_rate_hz = freqs.most_common()[0].0 as u32;
 
         path_map.insert(
             path.file_stem().unwrap().to_str().unwrap().to_string(),
@@ -112,6 +119,10 @@ impl EventHandler for Handler {
                     let mut handler = handler_lock.lock().await;
                     handler.play_only(audio);
                 } else if let Some(detail) = details.get(&name) {
+                    let audio_filters = [
+                        format!("asetrate={}*{}/100", detail.sample_rate_hz, speed),
+                        format!("aresample={}", detail.sample_rate_hz),
+                    ];
                     let mem = Memory::new(
                         input::ffmpeg_optioned(
                             detail.path.clone(),
@@ -126,10 +137,7 @@ impl EventHandler for Handler {
                                 "-acodec",
                                 "pcm_f32le",
                                 "-af",
-                                &format!(
-                                    "asetrate={}*{}/100,aresample={}",
-                                    detail.sample_rate_hz, speed, detail.sample_rate_hz
-                                ),
+                                &audio_filters.join(","),
                                 "-",
                             ],
                         )

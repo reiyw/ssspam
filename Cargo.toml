@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+counter = "0.5"
 dotenv = "0.15"
 glob = "0.3"
 moka = { version = "0.6", features = ["future"] }
