@@ -198,23 +198,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let mut data = client.data.write().await;
-
-        // TODO: make static
-        // TODO: store various details such as length
-        let mut path_map = BTreeMap::new();
-
-        for path in (glob(&format!("{}/*.mp3", env::var("SOUND_DIR")?))?).flatten() {
-            path_map.insert(
-                path.file_stem().unwrap().to_str().unwrap().to_string(),
-                path,
-            );
-        }
-
-        data.insert::<PathStore>(Arc::new(Mutex::new(path_map)));
-    }
-
-    {
-        let mut data = client.data.write().await;
         data.insert::<SoundStore>(Arc::new(Mutex::new(Cache::new(1_000))));
     }
 
