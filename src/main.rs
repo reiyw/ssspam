@@ -1,55 +1,32 @@
-//! Example demonstrating how to store and convert audio streams which you
-//! either want to reuse between servers, or to seek/loop on. See `join`, and `ting`.
-//!
-//! Requires the "cache", "standard_framework", and "voice" features be enabled in your
-//! Cargo.toml, like so:
-//!
-//! ```toml
-//! [dependencies.serenity]
-//! git = "https://github.com/serenity-rs/serenity.git"
-//! features = ["cache", "framework", "standard_framework", "voice"]
-//! ```
-use std::{
-    collections::HashMap,
-    convert::TryInto,
-    env,
-    path::PathBuf,
-    sync::{Arc, Weak},
-};
+use std::{collections::HashMap, convert::TryInto, env, path::PathBuf, sync::Arc};
 
 use dotenv::dotenv;
 use glob::glob;
 use once_cell::sync::Lazy;
 use regex::Regex;
-
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
     framework::{
         standard::{
             macros::{command, group},
-            Args, CommandResult,
+            CommandResult,
         },
         StandardFramework,
     },
     model::{channel::Message, gateway::Ready, misc::Mentionable},
-    prelude::Mutex,
+    prelude::*,
     Result as SerenityResult,
 };
-
 use songbird::{
-    driver::Bitrate,
     input::{
         self,
         cached::{Compressed, Memory},
         Input,
     },
-    Call, Event, EventContext, EventHandler as VoiceEventHandler, SerenityInit, TrackEvent,
+    tracks::create_player,
+    SerenityInit,
 };
-use songbird::{driver::Driver, ffmpeg, tracks::create_player};
-
-// This imports `typemap`'s `Key` as `TypeMapKey`.
-use serenity::prelude::*;
 
 static SAY_REG: Lazy<Mutex<Regex>> =
     Lazy::new(|| Mutex::new(Regex::new(r"^\s*(\S+)\s*(@?(\d{2,3}))?$").unwrap()));
@@ -110,38 +87,36 @@ impl EventHandler for Handler {
                     let (mut audio, _audio_handle) = create_player(source.into());
                     audio.set_volume(0.05);
                     handler.play_only(audio);
-                } else {
-                    if let Some(path) = paths.get(&name) {
-                        let mem = Memory::new(
-                            // input::ffmpeg(path).await.unwrap(),
-                            input::ffmpeg_optioned(
-                                path,
-                                &[],
-                                &[
-                                    "-f",
-                                    "s16le",
-                                    "-ac",
-                                    "2",
-                                    "-ar",
-                                    "48000",
-                                    "-acodec",
-                                    "pcm_f32le",
-                                    "-af",
-                                    &format!("asetrate=44100*{}/100,aresample=44100", speed),
-                                    "-",
-                                ],
-                            )
-                            .await
-                            .expect("File should be in root folder."),
+                } else if let Some(path) = paths.get(&name) {
+                    let mem = Memory::new(
+                        // input::ffmpeg(path).await.unwrap(),
+                        input::ffmpeg_optioned(
+                            path,
+                            &[],
+                            &[
+                                "-f",
+                                "s16le",
+                                "-ac",
+                                "2",
+                                "-ar",
+                                "48000",
+                                "-acodec",
+                                "pcm_f32le",
+                                "-af",
+                                &format!("asetrate=44100*{}/100,aresample=44100", speed),
+                                "-",
+                            ],
                         )
-                        .expect("These parameters are well-defined.");
-                        let _ = mem.raw.spawn_loader();
-                        let source = CachedSound::Uncompressed(mem);
-                        let (mut audio, _audio_handle) = create_player((&source).into());
-                        audio.set_volume(0.05);
-                        handler.play_only(audio);
-                        sources.insert(sound, source);
-                    }
+                        .await
+                        .expect("File should be in root folder."),
+                    )
+                    .expect("These parameters are well-defined.");
+                    let _ = mem.raw.spawn_loader();
+                    let source = CachedSound::Uncompressed(mem);
+                    let (mut audio, _audio_handle) = create_player((&source).into());
+                    audio.set_volume(0.05);
+                    handler.play_only(audio);
+                    sources.insert(sound, source);
                 }
             }
         }
@@ -149,7 +124,9 @@ impl EventHandler for Handler {
 }
 
 enum CachedSound {
+    #[allow(dead_code)]
     Compressed(Compressed),
+
     Uncompressed(Memory),
 }
 
@@ -173,7 +150,7 @@ struct Sound {
 }
 
 impl Sound {
-    fn new(name: String, speed: u32) -> Self {
+    const fn new(name: String, speed: u32) -> Self {
         Self { name, speed }
     }
 }
@@ -219,13 +196,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut path_map = HashMap::new();
 
-        for entry in glob(&format!("{}/*.mp3", env::var("SOUND_DIR")?))? {
-            if let Ok(path) = entry {
-                path_map.insert(
-                    path.file_stem().unwrap().to_str().unwrap().to_string(),
-                    path,
-                );
-            }
+        for path in (glob(&format!("{}/*.mp3", env::var("SOUND_DIR")?))?).flatten() {
+            path_map.insert(
+                path.file_stem().unwrap().to_str().unwrap().to_string(),
+                path,
+            );
         }
 
         data.insert::<PathStore>(Arc::new(Mutex::new(path_map)));
@@ -308,7 +283,7 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
 
-    let (handler_lock, success_reader) = manager.join(guild_id, connect_to).await;
+    let (_handler_lock, success_reader) = manager.join(guild_id, connect_to).await;
 
     if let Ok(_reader) = success_reader {
         check_msg(
@@ -325,32 +300,6 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     Ok(())
-}
-
-struct LoopPlaySound {
-    call_lock: Weak<Mutex<Call>>,
-    sources: Arc<Mutex<HashMap<String, CachedSound>>>,
-}
-
-#[async_trait]
-impl VoiceEventHandler for LoopPlaySound {
-    async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        if let Some(call_lock) = self.call_lock.upgrade() {
-            let src = {
-                let sources = self.sources.lock().await;
-                sources
-                    .get("loop")
-                    .expect("Handle placed into cache at startup.")
-                    .into()
-            };
-
-            let mut handler = call_lock.lock().await;
-            let sound = handler.play_source(src);
-            let _ = sound.set_volume(0.5);
-        }
-
-        None
-    }
 }
 
 #[command]
