@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, env, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, convert::TryInto, env, path::PathBuf, sync::Arc};
 
 use dotenv::dotenv;
 use glob::glob;
@@ -163,11 +163,11 @@ impl TypeMapKey for SoundStore {
 struct PathStore;
 
 impl TypeMapKey for PathStore {
-    type Value = Arc<Mutex<HashMap<String, PathBuf>>>;
+    type Value = Arc<Mutex<BTreeMap<String, PathBuf>>>;
 }
 
 #[group]
-#[commands(deafen, join, leave, mute, undeafen, unmute)]
+#[commands(deafen, join, leave, mute, undeafen, unmute, s)]
 struct General;
 
 #[tokio::main]
@@ -193,7 +193,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let mut data = client.data.write().await;
 
-        let mut path_map = HashMap::new();
+        // TODO: make static
+        // TODO: store various details such as length
+        let mut path_map = BTreeMap::new();
 
         for path in (glob(&format!("{}/*.mp3", env::var("SOUND_DIR")?))?).flatten() {
             path_map.insert(
@@ -441,4 +443,38 @@ fn check_msg(result: SerenityResult<Message>) {
     if let Err(why) = result {
         println!("Error sending message: {:?}", why);
     }
+}
+
+#[command]
+async fn s(ctx: &Context, msg: &Message) -> CommandResult {
+    if let Some(query) = msg.content.split_whitespace().collect::<Vec<_>>().get(1) {
+        let paths_lock = ctx
+            .data
+            .read()
+            .await
+            .get::<PathStore>()
+            .cloned()
+            .expect("Path cache was installed at startup.");
+        let paths = paths_lock.lock().await;
+        let mut paths: Vec<_> = paths
+            .keys()
+            .map(|k| (k, strsim::jaro_winkler(query, &k.to_lowercase())))
+            .collect();
+        paths.sort_by(|(_, d1), (_, d2)| d2.partial_cmp(d1).unwrap());
+        check_msg(
+            msg.channel_id
+                .say(
+                    &ctx.http,
+                    &paths[..10]
+                        .iter()
+                        .cloned()
+                        .map(|(name, _)| name)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+                .await,
+        );
+    }
+    Ok(())
 }
