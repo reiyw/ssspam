@@ -1495,6 +1495,8 @@ dependencies = [
  "bincode",
  "dotenv",
  "glob",
+ "once_cell",
+ "regex",
  "serde",
  "serenity",
  "songbird",

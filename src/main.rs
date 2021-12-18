@@ -19,6 +19,8 @@ use std::{
 
 use dotenv::dotenv;
 use glob::glob;
+use once_cell::sync::Lazy;
+use regex::Regex;
 
 use serenity::{
     async_trait,
@@ -49,6 +51,9 @@ use songbird::{driver::Driver, ffmpeg, tracks::create_player};
 // This imports `typemap`'s `Key` as `TypeMapKey`.
 use serenity::prelude::*;
 
+static SAY_REG: Lazy<Mutex<Regex>> =
+    Lazy::new(|| Mutex::new(Regex::new(r"^\s*(\S+)\s*(@?(\d{2,3}))?$").unwrap()));
+
 struct Handler;
 
 #[async_trait]
@@ -65,6 +70,12 @@ impl EventHandler for Handler {
             .await
             .expect("Songbird Voice client placed in at initialisation.")
             .clone();
+
+        let caps = SAY_REG.lock().await.captures(&msg.content);
+        if caps.is_none() {
+            return;
+        }
+        let caps = caps.unwrap();
 
         if let Some(handler_lock) = manager.get(guild_id) {
             let mut handler = handler_lock.lock().await;
@@ -87,28 +98,49 @@ impl EventHandler for Handler {
                 .expect("Path cache was installed at startup.");
             let paths = paths_lock.lock().await;
 
-            let mut iter = msg.content.split_ascii_whitespace();
-            if let Some(sound_name) = iter.next() {
-                if let Some(source) = sources.get(sound_name) {
+            if let Some(name) = caps.get(1).map(|m| m.as_str().to_string()) {
+                let speed = caps
+                    .get(3)
+                    .map(|m| m.as_str().parse().unwrap())
+                    .unwrap_or(100);
+                let sound = Sound::new(name.clone(), speed);
+
+                if let Some(source) = sources.get(&sound) {
                     // let handle = handler.play_source(source.into());
                     let (mut audio, _audio_handle) = create_player(source.into());
                     audio.set_volume(0.05);
                     handler.play_only(audio);
                 } else {
-                    if let Some(path) = paths.get(sound_name) {
+                    if let Some(path) = paths.get(&name) {
                         let mem = Memory::new(
-                            input::ffmpeg(path)
-                                .await
-                                .expect("File should be in root folder."),
+                            // input::ffmpeg(path).await.unwrap(),
+                            input::ffmpeg_optioned(
+                                path,
+                                &[],
+                                &[
+                                    "-f",
+                                    "s16le",
+                                    "-ac",
+                                    "2",
+                                    "-ar",
+                                    "48000",
+                                    "-acodec",
+                                    "pcm_f32le",
+                                    "-af",
+                                    &format!("asetrate=44100*{}/100,aresample=44100", speed),
+                                    "-",
+                                ],
+                            )
+                            .await
+                            .expect("File should be in root folder."),
                         )
                         .expect("These parameters are well-defined.");
                         let _ = mem.raw.spawn_loader();
                         let source = CachedSound::Uncompressed(mem);
-                        // let handle = handler.play_source((&source).into());
                         let (mut audio, _audio_handle) = create_player((&source).into());
                         audio.set_volume(0.05);
                         handler.play_only(audio);
-                        sources.insert(sound_name.into(), source);
+                        sources.insert(sound, source);
                     }
                 }
             }
@@ -134,10 +166,22 @@ impl From<&CachedSound> for Input {
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct Sound {
+    name: String,
+    speed: u32,
+}
+
+impl Sound {
+    fn new(name: String, speed: u32) -> Self {
+        Self { name, speed }
+    }
+}
+
 struct SoundStore;
 
 impl TypeMapKey for SoundStore {
-    type Value = Arc<Mutex<HashMap<String, CachedSound>>>;
+    type Value = Arc<Mutex<HashMap<Sound, CachedSound>>>;
 }
 
 struct PathStore;
@@ -147,7 +191,7 @@ impl TypeMapKey for PathStore {
 }
 
 #[group]
-#[commands(deafen, join, leave, mute, ting, undeafen, unmute)]
+#[commands(deafen, join, leave, mute, undeafen, unmute)]
 struct General;
 
 #[tokio::main]
@@ -372,81 +416,6 @@ async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
         }
 
         check_msg(msg.channel_id.say(&ctx.http, "Now muted").await);
-    }
-
-    Ok(())
-}
-
-#[command]
-#[only_in(guilds)]
-async fn ting(ctx: &Context, msg: &Message, _args: Args) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
-
-    let manager = songbird::get(ctx)
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
-
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-
-        let sources_lock = ctx
-            .data
-            .read()
-            .await
-            .get::<SoundStore>()
-            .cloned()
-            .expect("Sound cache was installed at startup.");
-        let mut sources = sources_lock.lock().await;
-
-        let paths_lock = ctx
-            .data
-            .read()
-            .await
-            .get::<PathStore>()
-            .cloned()
-            .expect("Path cache was installed at startup.");
-        let paths = paths_lock.lock().await;
-
-        let mut iter = msg.content.split_ascii_whitespace();
-        iter.next();
-        if let Some(sound_name) = iter.next() {
-            if let Some(source) = sources.get(sound_name) {
-                let _sound = handler.play_source(source.into());
-            } else {
-                if let Some(path) = paths.get(sound_name) {
-                    let mem = Memory::new(
-                        input::ffmpeg(path)
-                            .await
-                            .expect("File should be in root folder."),
-                    )
-                    .expect("These parameters are well-defined.");
-                    let _ = mem.raw.spawn_loader();
-                    // let song_src = Compressed::new(
-                    //     input::ffmpeg(path).await.expect("Link may be dead."),
-                    //     Bitrate::BitsPerSecond(128),
-                    // )
-                    // .expect("These parameters are well-defined.");
-                    // let _ = song_src.raw.spawn_loader();
-                    let source = CachedSound::Uncompressed(mem);
-                    let _handle = handler.play_source((&source).into());
-                    sources.insert(sound_name.into(), source);
-                }
-            }
-        }
-
-        // let source = sources
-        //     .get("ting")
-        //     .expect("Handle placed into cache at startup.");
-
-        // let _sound = handler.play_source(source.into());
-    } else {
-        check_msg(
-            msg.channel_id
-                .say(&ctx.http, "Not in a voice channel to play in")
-                .await,
-        );
     }
 
     Ok(())
