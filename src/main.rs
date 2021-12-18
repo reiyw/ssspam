@@ -250,7 +250,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let mut data = client.data.write().await;
-        data.insert::<SoundStore>(Arc::new(Mutex::new(Cache::new(1_000))));
+        data.insert::<SoundStore>(Arc::new(Mutex::new(Cache::new(100))));
     }
 
     let _ = client
