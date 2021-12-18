@@ -2,6 +2,7 @@ use std::{collections::HashMap, convert::TryInto, env, path::PathBuf, sync::Arc}
 
 use dotenv::dotenv;
 use glob::glob;
+use moka::future::Cache;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
@@ -64,7 +65,7 @@ impl EventHandler for Handler {
                 .get::<SoundStore>()
                 .cloned()
                 .expect("Sound cache was installed at startup.");
-            let mut sources = sources_lock.lock().await;
+            let sources = sources_lock.lock().await;
 
             let paths_lock = ctx
                 .data
@@ -83,7 +84,7 @@ impl EventHandler for Handler {
                 let sound = SoundInfo::new(name.clone(), speed);
 
                 if let Some(source) = sources.get(&sound) {
-                    let (mut audio, _audio_handle) = create_player(source.into());
+                    let (mut audio, _audio_handle) = create_player((&*source).into());
                     audio.set_volume(0.05);
                     handler.play_only(audio);
                 } else if let Some(path) = paths.get(&name) {
@@ -114,7 +115,7 @@ impl EventHandler for Handler {
                     let (mut audio, _audio_handle) = create_player((&source).into());
                     audio.set_volume(0.05);
                     handler.play_only(audio);
-                    sources.insert(sound, source);
+                    sources.insert(sound, Arc::new(source)).await;
                 }
             }
         }
@@ -156,7 +157,7 @@ impl SoundInfo {
 struct SoundStore;
 
 impl TypeMapKey for SoundStore {
-    type Value = Arc<Mutex<HashMap<SoundInfo, CachedSound>>>;
+    type Value = Arc<Mutex<Cache<SoundInfo, Arc<CachedSound>>>>;
 }
 
 struct PathStore;
@@ -206,7 +207,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let mut data = client.data.write().await;
-        data.insert::<SoundStore>(Arc::new(Mutex::new(HashMap::new())));
+        data.insert::<SoundStore>(Arc::new(Mutex::new(Cache::new(1_000))));
     }
 
     let _ = client
