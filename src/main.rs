@@ -29,16 +29,36 @@ use songbird::{
     SerenityInit,
 };
 
+struct SoundDetail {
+    path: PathBuf,
+    sample_rate_hz: u32,
+}
+
+impl SoundDetail {
+    fn new(path: PathBuf, sample_rate_hz: u32) -> Self {
+        Self {
+            path,
+            sample_rate_hz,
+        }
+    }
+}
+
 static SAY_REG: Lazy<Mutex<Regex>> =
     Lazy::new(|| Mutex::new(Regex::new(r"^\s*([-_!^~0-9a-zA-Z]+)\s*(@?(\d{2,3}))?$").unwrap()));
 
 // TODO: store various details such as length
-static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, PathBuf>>> = Lazy::new(|| {
+static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> = Lazy::new(|| {
     let mut path_map = BTreeMap::new();
     for path in (glob(&format!("{}/*.mp3", env::var("SOUND_DIR").unwrap())).unwrap()).flatten() {
+        let data = mp3_metadata::read_from_file(path.clone());
+        if data.is_err() {
+            println!("invalid: {:?}", path);
+        }
+        let sample_rate_hz = data.unwrap().frames[0].sampling_freq as u32;
+
         path_map.insert(
             path.file_stem().unwrap().to_str().unwrap().to_string(),
-            path,
+            SoundDetail::new(path, sample_rate_hz),
         );
     }
     Mutex::new(path_map)
@@ -68,7 +88,6 @@ impl EventHandler for Handler {
             .clone();
 
         if let Some(handler_lock) = manager.get(guild_id) {
-
             if let Some(name) = caps.get(1).map(|m| m.as_str().to_string()) {
                 let speed = caps
                     .get(3)
@@ -85,17 +104,17 @@ impl EventHandler for Handler {
                     .expect("Sound cache was installed at startup.");
                 let sources = sources_lock.lock().await;
 
-                let paths = SOUND_DETAILS.lock().await;
+                let details = SOUND_DETAILS.lock().await;
 
                 if let Some(source) = sources.get(&sound) {
                     let (mut audio, _audio_handle) = create_player((&*source).into());
                     audio.set_volume(0.05);
                     let mut handler = handler_lock.lock().await;
                     handler.play_only(audio);
-                } else if let Some(path) = paths.get(&name) {
+                } else if let Some(detail) = details.get(&name) {
                     let mem = Memory::new(
                         input::ffmpeg_optioned(
-                            path,
+                            detail.path.clone(),
                             &[],
                             &[
                                 "-f",
@@ -107,7 +126,10 @@ impl EventHandler for Handler {
                                 "-acodec",
                                 "pcm_f32le",
                                 "-af",
-                                &format!("asetrate=44100*{}/100,aresample=44100", speed),
+                                &format!(
+                                    "asetrate={}*{}/100,aresample={}",
+                                    detail.sample_rate_hz, speed, detail.sample_rate_hz
+                                ),
                                 "-",
                             ],
                         )
@@ -437,24 +459,17 @@ fn check_msg(result: SerenityResult<Message>) {
 #[command]
 async fn s(ctx: &Context, msg: &Message) -> CommandResult {
     if let Some(query) = msg.content.split_whitespace().collect::<Vec<_>>().get(1) {
-        let paths_lock = ctx
-            .data
-            .read()
-            .await
-            .get::<PathStore>()
-            .cloned()
-            .expect("Path cache was installed at startup.");
-        let paths = paths_lock.lock().await;
-        let mut paths: Vec<_> = paths
+        let lock = SOUND_DETAILS.lock().await;
+        let mut sims: Vec<_> = lock
             .keys()
             .map(|k| (k, strsim::jaro_winkler(query, &k.to_lowercase())))
             .collect();
-        paths.sort_by(|(_, d1), (_, d2)| d2.partial_cmp(d1).unwrap());
+        sims.sort_by(|(_, d1), (_, d2)| d2.partial_cmp(d1).unwrap());
         check_msg(
             msg.channel_id
                 .say(
                     &ctx.http,
-                    &paths[..10]
+                    &sims[..10]
                         .iter()
                         .cloned()
                         .map(|(name, _)| name)
