@@ -83,13 +83,11 @@ impl EventHandler for Handler {
                 let sound = Sound::new(name.clone(), speed);
 
                 if let Some(source) = sources.get(&sound) {
-                    // let handle = handler.play_source(source.into());
                     let (mut audio, _audio_handle) = create_player(source.into());
                     audio.set_volume(0.05);
                     handler.play_only(audio);
                 } else if let Some(path) = paths.get(&name) {
                     let mem = Memory::new(
-                        // input::ffmpeg(path).await.unwrap(),
                         input::ffmpeg_optioned(
                             path,
                             &[],
