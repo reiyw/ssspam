@@ -221,7 +221,7 @@ impl TypeMapKey for PathStore {
 }
 
 #[group]
-#[commands(deafen, join, leave, mute, undeafen, unmute, s, r)]
+#[commands(deafen, join, leave, mute, undeafen, unmute, s, r, stop)]
 struct General;
 
 #[tokio::main]
@@ -533,6 +533,30 @@ async fn r(ctx: &Context, msg: &Message) -> CommandResult {
         }
         check_msg(msg.channel_id.say(&ctx.http, result).await);
     }
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
+    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild_id = guild.id;
+
+    let manager = songbird::get(ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+    let handler_lock = match manager.get(guild_id) {
+        Some(handler) => handler,
+        None => {
+            check_msg(msg.reply(ctx, "Not in a voice channel").await);
+
+            return Ok(());
+        }
+    };
+    let mut handler = handler_lock.lock().await;
+    handler.stop();
 
     Ok(())
 }
