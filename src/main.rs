@@ -30,7 +30,19 @@ use songbird::{
 };
 
 static SAY_REG: Lazy<Mutex<Regex>> =
-    Lazy::new(|| Mutex::new(Regex::new(r"^\s*(\S+)\s*(@?(\d{2,3}))?$").unwrap()));
+    Lazy::new(|| Mutex::new(Regex::new(r"^\s*([-_!^~0-9a-zA-Z]+)\s*(@?(\d{2,3}))?$").unwrap()));
+
+// TODO: store various details such as length
+static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, PathBuf>>> = Lazy::new(|| {
+    let mut path_map = BTreeMap::new();
+    for path in (glob(&format!("{}/*.mp3", env::var("SOUND_DIR").unwrap())).unwrap()).flatten() {
+        path_map.insert(
+            path.file_stem().unwrap().to_str().unwrap().to_string(),
+            path,
+        );
+    }
+    Mutex::new(path_map)
+});
 
 struct Handler;
 
@@ -41,6 +53,12 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
+        let caps = { SAY_REG.lock().await.captures(&msg.content) };
+        if caps.is_none() {
+            return;
+        }
+        let caps = caps.unwrap();
+
         let guild = msg.guild(&ctx.cache).await.unwrap();
         let guild_id = guild.id;
 
@@ -49,32 +67,7 @@ impl EventHandler for Handler {
             .expect("Songbird Voice client placed in at initialisation.")
             .clone();
 
-        let caps = SAY_REG.lock().await.captures(&msg.content);
-        if caps.is_none() {
-            return;
-        }
-        let caps = caps.unwrap();
-
         if let Some(handler_lock) = manager.get(guild_id) {
-            let mut handler = handler_lock.lock().await;
-
-            let sources_lock = ctx
-                .data
-                .read()
-                .await
-                .get::<SoundStore>()
-                .cloned()
-                .expect("Sound cache was installed at startup.");
-            let sources = sources_lock.lock().await;
-
-            let paths_lock = ctx
-                .data
-                .read()
-                .await
-                .get::<PathStore>()
-                .cloned()
-                .expect("Path cache was installed at startup.");
-            let paths = paths_lock.lock().await;
 
             if let Some(name) = caps.get(1).map(|m| m.as_str().to_string()) {
                 let speed = caps
@@ -83,9 +76,21 @@ impl EventHandler for Handler {
                     .unwrap_or(100);
                 let sound = SoundInfo::new(name.clone(), speed);
 
+                let sources_lock = ctx
+                    .data
+                    .read()
+                    .await
+                    .get::<SoundStore>()
+                    .cloned()
+                    .expect("Sound cache was installed at startup.");
+                let sources = sources_lock.lock().await;
+
+                let paths = SOUND_DETAILS.lock().await;
+
                 if let Some(source) = sources.get(&sound) {
                     let (mut audio, _audio_handle) = create_player((&*source).into());
                     audio.set_volume(0.05);
+                    let mut handler = handler_lock.lock().await;
                     handler.play_only(audio);
                 } else if let Some(path) = paths.get(&name) {
                     let mem = Memory::new(
@@ -114,6 +119,7 @@ impl EventHandler for Handler {
                     let source = CachedSound::Uncompressed(mem);
                     let (mut audio, _audio_handle) = create_player((&source).into());
                     audio.set_volume(0.05);
+                    let mut handler = handler_lock.lock().await;
                     handler.play_only(audio);
                     sources.insert(sound, Arc::new(source)).await;
                 }
