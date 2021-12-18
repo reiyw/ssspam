@@ -80,7 +80,7 @@ impl EventHandler for Handler {
                     .get(3)
                     .map(|m| m.as_str().parse().unwrap())
                     .unwrap_or(100);
-                let sound = Sound::new(name.clone(), speed);
+                let sound = SoundInfo::new(name.clone(), speed);
 
                 if let Some(source) = sources.get(&sound) {
                     let (mut audio, _audio_handle) = create_player(source.into());
@@ -142,12 +142,12 @@ impl From<&CachedSound> for Input {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-struct Sound {
+struct SoundInfo {
     name: String,
     speed: u32,
 }
 
-impl Sound {
+impl SoundInfo {
     const fn new(name: String, speed: u32) -> Self {
         Self { name, speed }
     }
@@ -156,7 +156,7 @@ impl Sound {
 struct SoundStore;
 
 impl TypeMapKey for SoundStore {
-    type Value = Arc<Mutex<HashMap<Sound, CachedSound>>>;
+    type Value = Arc<Mutex<HashMap<SoundInfo, CachedSound>>>;
 }
 
 struct PathStore;
