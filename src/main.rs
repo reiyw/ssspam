@@ -230,7 +230,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv()?;
 
     // Configure the client with your Discord bot token in the environment.
-    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let args: Vec<String> = env::args().collect();
+    let token = args
+        .get(1)
+        .map(String::from)
+        .unwrap_or(env::var("DISCORD_TOKEN").unwrap());
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("~"))

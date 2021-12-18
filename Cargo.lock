@@ -1854,6 +1854,7 @@ dependencies = [
  "mp3-metadata",
  "once_cell",
  "puremp3",
+ "rand 0.8.4",
  "regex",
  "serenity",
  "songbird",
