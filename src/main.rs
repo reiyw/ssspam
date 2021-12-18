@@ -92,6 +92,11 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
+        // saysound-spam channel
+        if msg.channel_id != 921678977662332928 {
+            return;
+        }
+
         let caps = { SAY_REG.lock().await.captures(&msg.content) };
         if caps.is_none() {
             return;
@@ -129,7 +134,7 @@ impl EventHandler for Handler {
                     let (mut audio, _audio_handle) = create_player((&*source).into());
                     audio.set_volume(0.05);
                     let mut handler = handler_lock.lock().await;
-                    handler.play_only(audio);
+                    handler.play(audio);
                 } else if let Some(detail) = details.get(&name) {
                     let audio_filters = [
                         format!("asetrate={}*{}/100", detail.sample_rate_hz, speed),
@@ -162,7 +167,7 @@ impl EventHandler for Handler {
                     let (mut audio, _audio_handle) = create_player((&source).into());
                     audio.set_volume(0.05);
                     let mut handler = handler_lock.lock().await;
-                    handler.play_only(audio);
+                    handler.play(audio);
                     sources.insert(sound, Arc::new(source)).await;
                 }
             }
