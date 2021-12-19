@@ -52,8 +52,16 @@ static SAY_REG: Lazy<Mutex<Regex>> =
 
 // TODO: store various details such as length
 static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> = Lazy::new(|| {
+    let fixed_ss_name_reg = Regex::new(r"^([^_]+)_\d+$").unwrap();
+
     let mut path_map = BTreeMap::new();
+
     for path in (glob(&format!("{}/*.mp3", env::var("SOUND_DIR").unwrap())).unwrap()).flatten() {
+        let mut ss_name = path.file_stem().unwrap().to_str().unwrap().to_string();
+        if let Some(caps) = fixed_ss_name_reg.captures(&ss_name) {
+            ss_name = caps.get(1).unwrap().as_str().to_string();
+        };
+
         let data = mp3_metadata::read_from_file(path.clone());
         if data.is_err() {
             println!("invalid: {:?}", path);
@@ -76,10 +84,7 @@ static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> = Lazy::new(|| 
             .collect();
         let is_stereo = !chan_types.most_common()[0].0;
 
-        path_map.insert(
-            path.file_stem().unwrap().to_str().unwrap().to_string(),
-            SoundDetail::new(path, sample_rate_hz, is_stereo),
-        );
+        path_map.insert(ss_name, SoundDetail::new(path, sample_rate_hz, is_stereo));
     }
     Mutex::new(path_map)
 });
@@ -93,8 +98,8 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        // saysound-spam channel
-        if msg.channel_id != 921678977662332928 {
+        // Allow saysound-spam channel at css server or general channel at my server.
+        if !(msg.channel_id == 921678977662332928 || msg.channel_id == 391743739430699010) {
             return;
         }
 
@@ -229,6 +234,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     dotenv()?;
+
+    let _ = SOUND_DETAILS.lock();
 
     // Configure the client with your Discord bot token in the environment.
     let args: Vec<String> = env::args().collect();
