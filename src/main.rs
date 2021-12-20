@@ -233,7 +233,7 @@ struct General;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    dotenv()?;
+    dotenv().ok();
 
     let _ = SOUND_DETAILS.lock();
 
