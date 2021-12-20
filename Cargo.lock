@@ -160,12 +160,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
-name = "bitstream-io"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "614aa3f2bac03707e62a84d18a48dd3d9ea6171313fd5e6a53b5054d8ae74601"
-
-[[package]]
 name = "block-buffer"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1247,16 +1241,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "puremp3"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b7efbb39e373af70c139e0611375fa6cad751fb93d528a610b55302710d883"
-dependencies = [
- "bitstream-io",
- "byteorder",
-]
-
-[[package]]
 name = "quanta"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1815,6 +1799,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ssspambot"
+version = "0.1.0"
+dependencies = [
+ "counter",
+ "dotenv",
+ "glob",
+ "moka",
+ "mp3-metadata",
+ "once_cell",
+ "rand 0.8.4",
+ "regex",
+ "serenity",
+ "songbird",
+ "strsim",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1842,28 +1847,6 @@ name = "subtle"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
-
-[[package]]
-name = "surfpvparena"
-version = "0.1.0"
-dependencies = [
- "counter",
- "dotenv",
- "glob",
- "moka",
- "mp3-metadata",
- "once_cell",
- "puremp3",
- "rand 0.8.4",
- "regex",
- "serenity",
- "songbird",
- "strsim",
- "tokio",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "symphonia-core"
