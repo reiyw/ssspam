@@ -15,6 +15,7 @@ regex = "1.5"
 serenity = { version = "0.10", features = ["cache", "framework", "standard_framework", "voice"] }
 songbird = "0.2"
 strsim = "0.10"
+structopt = "0.3"
 tokio = { version = "1.15", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1"
 tracing-subscriber = "0.2"

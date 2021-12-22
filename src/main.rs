@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, convert::TryInto, env, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 
 use counter::Counter;
 use dotenv::dotenv;
@@ -30,6 +30,7 @@ use songbird::{
     tracks::create_player,
     SerenityInit,
 };
+use structopt::StructOpt;
 
 struct SoundDetail {
     path: PathBuf,
@@ -50,13 +51,15 @@ impl SoundDetail {
 static SAY_REG: Lazy<Mutex<Regex>> =
     Lazy::new(|| Mutex::new(Regex::new(r"^\s*([-_!^~0-9a-zA-Z]+)\s*(@?(\d{2,3}))?$").unwrap()));
 
-// TODO: store various details such as length
-static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> = Lazy::new(|| {
+static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> =
+    Lazy::new(|| Mutex::new(BTreeMap::new()));
+
+fn load_sounds(sound_dir: PathBuf) -> BTreeMap<String, SoundDetail> {
     let fixed_ss_name_reg = Regex::new(r"^([^_]+)_\d+$").unwrap();
 
     let mut path_map = BTreeMap::new();
 
-    for path in (glob(&format!("{}/*.mp3", env::var("SOUND_DIR").unwrap())).unwrap()).flatten() {
+    for path in (glob(&format!("{}/*.mp3", sound_dir.to_str().unwrap())).unwrap()).flatten() {
         let mut ss_name = path.file_stem().unwrap().to_str().unwrap().to_string();
         if let Some(caps) = fixed_ss_name_reg.captures(&ss_name) {
             ss_name = caps.get(1).unwrap().as_str().to_string();
@@ -86,8 +89,9 @@ static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> = Lazy::new(|| 
 
         path_map.insert(ss_name, SoundDetail::new(path, sample_rate_hz, is_stereo));
     }
-    Mutex::new(path_map)
-});
+
+    path_map
+}
 
 struct Handler;
 
@@ -229,26 +233,34 @@ impl TypeMapKey for PathStore {
 #[commands(deafen, join, leave, mute, undeafen, unmute, s, r, stop)]
 struct General;
 
+#[derive(Debug, StructOpt)]
+#[structopt(name = "ssspam")]
+struct Opt {
+    #[structopt(long, env)]
+    discord_token: String,
+
+    #[structopt(long, parse(from_os_str), env)]
+    sound_dir: PathBuf,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     dotenv().ok();
 
-    let _ = SOUND_DETAILS.lock();
+    let opt = Opt::from_args();
 
-    // Configure the client with your Discord bot token in the environment.
-    let args: Vec<String> = env::args().collect();
-    let token = args
-        .get(1)
-        .map(String::from)
-        .unwrap_or(env::var("DISCORD_TOKEN").unwrap());
+    {
+        let mut sound_details = SOUND_DETAILS.lock().await;
+        *sound_details = load_sounds(opt.sound_dir);
+    }
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("~"))
         .group(&GENERAL_GROUP);
 
-    let mut client = Client::builder(&token)
+    let mut client = Client::builder(&opt.discord_token)
         .event_handler(Handler)
         .framework(framework)
         .register_songbird()
