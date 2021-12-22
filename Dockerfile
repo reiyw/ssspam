@@ -22,6 +22,15 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     libopus-dev \
     ffmpeg \
+    wget \
+    unzip \
     ;
+
+RUN mkdir sound; \
+    cd sound; \
+    wget https://storage.googleapis.com/surfpvparena/2021-12-20.zip; \
+    unzip 2021-12-20.zip; \
+    rm -f 2021-12-20.zip;
+
 COPY --from=builder /app/target/release/ssspambot /usr/local/bin
 CMD ["/usr/local/bin/ssspambot"]
