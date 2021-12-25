@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    convert::TryInto,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use counter::Counter;
 use dotenv::dotenv;
@@ -17,7 +22,12 @@ use serenity::{
         },
         StandardFramework,
     },
-    model::{channel::Message, gateway::Ready, misc::Mentionable},
+    model::{
+        channel::Message,
+        gateway::Ready,
+        id::{ChannelId, GuildId},
+        misc::Mentionable,
+    },
     prelude::*,
     Result as SerenityResult,
 };
@@ -107,14 +117,35 @@ impl EventHandler for Handler {
             return;
         }
 
+        let guild = msg.guild(&ctx.cache).await.unwrap();
+        let guild_id = guild.id;
+
+        let authors_voice_channel_id = guild
+            .voice_states
+            .get(&msg.author.id)
+            .and_then(|voice_state| voice_state.channel_id);
+
+        let bots_voice_channel_id = ctx
+            .data
+            .read()
+            .await
+            .get::<BotJoinningChannel>()
+            .cloned()
+            .unwrap()
+            .lock()
+            .await
+            .get(&guild_id)
+            .cloned();
+
+        if authors_voice_channel_id != bots_voice_channel_id {
+            return;
+        }
+
         let caps = { SAY_REG.lock().await.captures(&msg.content) };
         if caps.is_none() {
             return;
         }
         let caps = caps.unwrap();
-
-        let guild = msg.guild(&ctx.cache).await.unwrap();
-        let guild_id = guild.id;
 
         let manager = songbird::get(&ctx)
             .await
@@ -223,10 +254,10 @@ impl TypeMapKey for SoundStore {
     type Value = Arc<Mutex<Cache<SoundInfo, Arc<CachedSound>>>>;
 }
 
-struct PathStore;
+struct BotJoinningChannel;
 
-impl TypeMapKey for PathStore {
-    type Value = Arc<Mutex<BTreeMap<String, PathBuf>>>;
+impl TypeMapKey for BotJoinningChannel {
+    type Value = Arc<Mutex<HashMap<GuildId, ChannelId>>>;
 }
 
 #[group]
@@ -270,6 +301,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let mut data = client.data.write().await;
         data.insert::<SoundStore>(Arc::new(Mutex::new(Cache::new(50))));
+    }
+
+    {
+        let mut data = client.data.write().await;
+        data.insert::<BotJoinningChannel>(Arc::new(Mutex::new(HashMap::new())));
     }
 
     let _ = client
@@ -352,6 +388,14 @@ async fn join(ctx: &Context, msg: &Message) -> CommandResult {
                 .say(&ctx.http, &format!("Joined {}", connect_to.mention()))
                 .await,
         );
+        let voice_channels = ctx
+            .data
+            .read()
+            .await
+            .get::<BotJoinningChannel>()
+            .cloned()
+            .unwrap();
+        voice_channels.lock().await.insert(guild_id, connect_to);
     } else {
         check_msg(
             msg.channel_id
