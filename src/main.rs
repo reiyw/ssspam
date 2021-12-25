@@ -5,9 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use counter::Counter;
 use dotenv::dotenv;
-use glob::glob;
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
@@ -42,66 +40,13 @@ use songbird::{
 };
 use structopt::StructOpt;
 
-struct SoundDetail {
-    path: PathBuf,
-    sample_rate_hz: u32,
-    is_stereo: bool,
-}
-
-impl SoundDetail {
-    fn new(path: PathBuf, sample_rate_hz: u32, is_stereo: bool) -> Self {
-        Self {
-            path,
-            sample_rate_hz,
-            is_stereo,
-        }
-    }
-}
+use ssspambot::{load_sounds_try_from_cache, SoundDetail};
 
 static SAY_REG: Lazy<Mutex<Regex>> =
     Lazy::new(|| Mutex::new(Regex::new(r"^\s*([-_!^~0-9a-zA-Z]+)\s*(@?(\d{2,3}))?$").unwrap()));
 
 static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| Mutex::new(BTreeMap::new()));
-
-fn load_sounds(sound_dir: PathBuf) -> BTreeMap<String, SoundDetail> {
-    let fixed_ss_name_reg = Regex::new(r"^([^_]+)_\d+$").unwrap();
-
-    let mut path_map = BTreeMap::new();
-
-    for path in (glob(&format!("{}/*.mp3", sound_dir.to_str().unwrap())).unwrap()).flatten() {
-        let mut ss_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-        if let Some(caps) = fixed_ss_name_reg.captures(&ss_name) {
-            ss_name = caps.get(1).unwrap().as_str().to_string();
-        };
-
-        let data = mp3_metadata::read_from_file(path.clone());
-        if data.is_err() {
-            println!("invalid: {:?}", path);
-        }
-
-        let freqs: Counter<_> = data
-            .as_ref()
-            .unwrap()
-            .frames
-            .iter()
-            .map(|f| f.sampling_freq)
-            .collect();
-        let sample_rate_hz = freqs.most_common()[0].0 as u32;
-
-        let chan_types: Counter<_> = data
-            .unwrap()
-            .frames
-            .iter()
-            .map(|f| f.chan_type == mp3_metadata::ChannelType::SingleChannel)
-            .collect();
-        let is_stereo = !chan_types.most_common()[0].0;
-
-        path_map.insert(ss_name, SoundDetail::new(path, sample_rate_hz, is_stereo));
-    }
-
-    path_map
-}
 
 struct Handler;
 
@@ -284,7 +229,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let mut sound_details = SOUND_DETAILS.lock().await;
-        *sound_details = load_sounds(opt.sound_dir);
+        *sound_details = load_sounds_try_from_cache(opt.sound_dir);
     }
 
     let framework = StandardFramework::new()
@@ -311,7 +256,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shard_manager = client.shard_manager.clone();
 
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.expect("Could not register ctrl+c handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Could not register ctrl+c handler");
         shard_manager.lock().await.shutdown_all().await;
     });
 
