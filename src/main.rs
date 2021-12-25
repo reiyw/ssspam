@@ -25,6 +25,7 @@ use serenity::{
         gateway::Ready,
         id::{ChannelId, GuildId},
         misc::Mentionable,
+        prelude::VoiceState,
     },
     prelude::*,
     Result as SerenityResult,
@@ -155,6 +156,47 @@ impl EventHandler for Handler {
                     let mut handler = handler_lock.lock().await;
                     handler.play(audio);
                     sources.insert(sound, Arc::new(source)).await;
+                }
+            }
+        }
+    }
+
+    async fn voice_state_update(
+        &self,
+        ctx: Context,
+        _: Option<GuildId>,
+        old_state: Option<VoiceState>,
+        _: VoiceState,
+    ) {
+        if let Some(old_state) = old_state {
+            let guild_id = old_state.guild_id.unwrap();
+            let bots_voice_channel_id = ctx
+                .data
+                .read()
+                .await
+                .get::<BotJoinningChannel>()
+                .cloned()
+                .unwrap()
+                .lock()
+                .await
+                .get(&guild_id)
+                .cloned();
+            if bots_voice_channel_id != old_state.channel_id {
+                return;
+            }
+
+            if let Some(channel_id) = old_state.channel_id {
+                let channel = ctx.cache.guild_channel(channel_id).await.unwrap();
+                let members = channel.members(&ctx.cache).await.unwrap();
+                if members.len() == 1 && members[0].user.bot {
+                    let manager = songbird::get(&ctx)
+                        .await
+                        .expect("Songbird Voice client placed in at initialisation.")
+                        .clone();
+                    let has_handler = manager.get(guild_id).is_some();
+                    if has_handler {
+                        manager.remove(guild_id).await.unwrap();
+                    }
                 }
             }
         }
