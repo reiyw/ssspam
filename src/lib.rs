@@ -1,3 +1,5 @@
+pub mod parser;
+
 use std::{
     collections::BTreeMap,
     fs,
@@ -6,6 +8,8 @@ use std::{
 
 use counter::Counter;
 use glob::glob;
+#[macro_use]
+extern crate pest_derive;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 

@@ -1,0 +1,5 @@
+WHITESPACE = _{ " " }
+sound_name = @{ (ASCII_ALPHANUMERIC | "-" | "_" | "^" | "!" | "~")+ }
+speed = @{ ASCII_DIGIT+ }
+cmd = { sound_name ~ (speed)? }
+cmds = { SOI ~ cmd ~ (";" ~ cmd)* ~ ";"? ~ EOI }

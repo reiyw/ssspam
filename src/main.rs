@@ -9,7 +9,6 @@ use dotenv::dotenv;
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
-use regex::Regex;
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
@@ -41,10 +40,7 @@ use songbird::{
 };
 use structopt::StructOpt;
 
-use ssspambot::{load_sounds_try_from_cache, SoundDetail};
-
-static SAY_REG: Lazy<Mutex<Regex>> =
-    Lazy::new(|| Mutex::new(Regex::new(r"^\s*([-_!^~0-9a-zA-Z]+)\s*(@?(\d{2,3}))?$").unwrap()));
+use ssspambot::{load_sounds_try_from_cache, parser::parse_say_commands, SoundDetail};
 
 static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| Mutex::new(BTreeMap::new()));
@@ -87,11 +83,14 @@ impl EventHandler for Handler {
             return;
         }
 
-        let caps = { SAY_REG.lock().await.captures(&msg.content) };
-        if caps.is_none() {
+        let cmds = parse_say_commands(&msg.content);
+        if cmds.is_err() {
             return;
         }
-        let caps = caps.unwrap();
+        let cmds = cmds.unwrap();
+        if cmds.len() == 0 {
+            return;
+        }
 
         let manager = songbird::get(&ctx)
             .await
@@ -99,12 +98,8 @@ impl EventHandler for Handler {
             .clone();
 
         if let Some(handler_lock) = manager.get(guild_id) {
-            if let Some(name) = caps.get(1).map(|m| m.as_str().to_string()) {
-                let speed = caps
-                    .get(3)
-                    .map(|m| m.as_str().parse().unwrap())
-                    .unwrap_or(100);
-                let sound = SoundInfo::new(name.clone(), speed);
+            for cmd in &cmds {
+                let sound = SoundInfo::new(cmd.name.clone(), cmd.speed);
 
                 let sources_lock = ctx
                     .data
@@ -119,12 +114,13 @@ impl EventHandler for Handler {
 
                 if let Some(source) = sources.get(&sound) {
                     let (mut audio, _audio_handle) = create_player((&*source).into());
+                    // audio.set_volume(0.05 / (cmds.len() as f32));
                     audio.set_volume(0.05);
                     let mut handler = handler_lock.lock().await;
                     handler.play(audio);
-                } else if let Some(detail) = details.get(&name) {
+                } else if let Some(detail) = details.get(&cmd.name) {
                     let audio_filters = [
-                        format!("asetrate={}*{}/100", detail.sample_rate_hz, speed),
+                        format!("asetrate={}*{}/100", detail.sample_rate_hz, cmd.speed),
                         format!("aresample={}", detail.sample_rate_hz),
                     ];
                     let mem = Memory::new(
@@ -152,6 +148,7 @@ impl EventHandler for Handler {
                     let _ = mem.raw.spawn_loader();
                     let source = CachedSound::Uncompressed(mem);
                     let (mut audio, _audio_handle) = create_player((&source).into());
+                    // audio.set_volume(0.05 / (cmds.len() as f32));
                     audio.set_volume(0.05);
                     let mut handler = handler_lock.lock().await;
                     handler.play(audio);
