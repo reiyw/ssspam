@@ -4,6 +4,7 @@ use std::{
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use counter::Counter;
@@ -12,6 +13,10 @@ use glob::glob;
 extern crate pest_derive;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use songbird::{create_player, input::Input, Call};
+use tokio::sync::Mutex;
+
+const VOLUME: f32 = 0.05;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SoundDetail {
@@ -76,4 +81,11 @@ pub fn load_sounds_try_from_cache<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<Stri
         Ok(encoded) => bincode::deserialize(&encoded).unwrap(),
         Err(_) => load_sounds(sound_dir),
     }
+}
+
+pub async fn play_source(source: Input, handler_lock: Arc<Mutex<Call>>) {
+    let (mut audio, _audio_handle) = create_player(source);
+    audio.set_volume(VOLUME);
+    let mut handler = handler_lock.lock().await;
+    handler.play(audio);
 }

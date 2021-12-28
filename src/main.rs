@@ -35,15 +35,65 @@ use songbird::{
         cached::{Compressed, Memory},
         Input,
     },
-    tracks::create_player,
-    SerenityInit,
+    Call, SerenityInit,
 };
 use structopt::StructOpt;
 
-use ssspambot::{load_sounds_try_from_cache, parser::parse_say_commands, SoundDetail};
+use ssspambot::{
+    load_sounds_try_from_cache,
+    parser::{parse_say_commands, SayCommand},
+    play_source, SoundDetail,
+};
 
 static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| Mutex::new(BTreeMap::new()));
+
+async fn play_cmd(
+    cmd: SayCommand,
+    handler_lock: Arc<tokio::sync::Mutex<Call>>,
+    sources_lock: Arc<tokio::sync::Mutex<Cache<SoundInfo, Arc<CachedSound>>>>,
+) {
+    let sound = SoundInfo::new(cmd.name.clone(), cmd.speed);
+
+    let sources = sources_lock.lock().await;
+
+    let details = SOUND_DETAILS.lock().await;
+
+    if let Some(source) = sources.get(&sound) {
+        play_source((&*source).into(), handler_lock.clone()).await;
+    } else if let Some(detail) = details.get(&cmd.name) {
+        let audio_filters = [
+            format!("asetrate={}*{}/100", detail.sample_rate_hz, cmd.speed),
+            format!("aresample={}", detail.sample_rate_hz),
+        ];
+        let mem = Memory::new(
+            input::ffmpeg_optioned(
+                detail.path.clone(),
+                &[],
+                &[
+                    "-f",
+                    "s16le",
+                    "-ac",
+                    if detail.is_stereo { "2" } else { "1" },
+                    "-ar",
+                    "48000",
+                    "-acodec",
+                    "pcm_f32le",
+                    "-af",
+                    &audio_filters.join(","),
+                    "-",
+                ],
+            )
+            .await
+            .expect("File should be in root folder."),
+        )
+        .expect("These parameters are well-defined.");
+        let _ = mem.raw.spawn_loader();
+        let source = CachedSound::Uncompressed(mem);
+        play_source((&source).into(), handler_lock.clone()).await;
+        sources.insert(sound, Arc::new(source)).await;
+    }
+}
 
 struct Handler;
 
@@ -97,63 +147,17 @@ impl EventHandler for Handler {
             .expect("Songbird Voice client placed in at initialisation.")
             .clone();
 
+        let sources_lock = ctx
+            .data
+            .read()
+            .await
+            .get::<SoundStore>()
+            .cloned()
+            .expect("Sound cache was installed at startup.");
+
         if let Some(handler_lock) = manager.get(guild_id) {
-            for cmd in &cmds {
-                let sound = SoundInfo::new(cmd.name.clone(), cmd.speed);
-
-                let sources_lock = ctx
-                    .data
-                    .read()
-                    .await
-                    .get::<SoundStore>()
-                    .cloned()
-                    .expect("Sound cache was installed at startup.");
-                let sources = sources_lock.lock().await;
-
-                let details = SOUND_DETAILS.lock().await;
-
-                if let Some(source) = sources.get(&sound) {
-                    let (mut audio, _audio_handle) = create_player((&*source).into());
-                    // audio.set_volume(0.05 / (cmds.len() as f32));
-                    audio.set_volume(0.05);
-                    let mut handler = handler_lock.lock().await;
-                    handler.play(audio);
-                } else if let Some(detail) = details.get(&cmd.name) {
-                    let audio_filters = [
-                        format!("asetrate={}*{}/100", detail.sample_rate_hz, cmd.speed),
-                        format!("aresample={}", detail.sample_rate_hz),
-                    ];
-                    let mem = Memory::new(
-                        input::ffmpeg_optioned(
-                            detail.path.clone(),
-                            &[],
-                            &[
-                                "-f",
-                                "s16le",
-                                "-ac",
-                                if detail.is_stereo { "2" } else { "1" },
-                                "-ar",
-                                "48000",
-                                "-acodec",
-                                "pcm_f32le",
-                                "-af",
-                                &audio_filters.join(","),
-                                "-",
-                            ],
-                        )
-                        .await
-                        .expect("File should be in root folder."),
-                    )
-                    .expect("These parameters are well-defined.");
-                    let _ = mem.raw.spawn_loader();
-                    let source = CachedSound::Uncompressed(mem);
-                    let (mut audio, _audio_handle) = create_player((&source).into());
-                    // audio.set_volume(0.05 / (cmds.len() as f32));
-                    audio.set_volume(0.05);
-                    let mut handler = handler_lock.lock().await;
-                    handler.play(audio);
-                    sources.insert(sound, Arc::new(source)).await;
-                }
+            for cmd in cmds {
+                play_cmd(cmd, handler_lock.clone(), sources_lock.clone()).await;
             }
         }
     }
