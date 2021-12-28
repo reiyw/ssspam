@@ -88,7 +88,7 @@ impl EventHandler for Handler {
             return;
         }
         let cmds = cmds.unwrap();
-        if cmds.len() == 0 {
+        if cmds.is_empty() {
             return;
         }
 

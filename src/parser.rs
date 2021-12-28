@@ -29,7 +29,7 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                     .next()
                     .map(|p| p.as_str().parse().unwrap())
                     .unwrap_or_else(|| 100);
-                if 10 <= speed && speed <= 999 {
+                if (10..=999).contains(&speed) {
                     cmds.push(SayCommand { name, speed });
                 }
             }
