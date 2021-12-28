@@ -18,7 +18,7 @@ use tokio::sync::Mutex;
 
 const VOLUME: f32 = 0.05;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SoundDetail {
     pub path: PathBuf,
     pub sample_rate_hz: u32,

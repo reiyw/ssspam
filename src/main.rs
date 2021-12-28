@@ -45,8 +45,8 @@ use ssspambot::{
     play_source, SoundDetail,
 };
 
-static SOUND_DETAILS: Lazy<Mutex<BTreeMap<String, SoundDetail>>> =
-    Lazy::new(|| Mutex::new(BTreeMap::new()));
+static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
+    Lazy::new(|| RwLock::new(BTreeMap::new()));
 
 async fn play_cmd(
     cmd: SayCommand,
@@ -55,44 +55,55 @@ async fn play_cmd(
 ) {
     let sound = SoundInfo::new(cmd.name.clone(), cmd.speed);
 
-    let sources = sources_lock.lock().await;
-
-    let details = SOUND_DETAILS.lock().await;
-
-    if let Some(source) = sources.get(&sound) {
-        play_source((&*source).into(), handler_lock.clone()).await;
-    } else if let Some(detail) = details.get(&cmd.name) {
-        let audio_filters = [
-            format!("asetrate={}*{}/100", detail.sample_rate_hz, cmd.speed),
-            format!("aresample={}", detail.sample_rate_hz),
-        ];
-        let mem = Memory::new(
-            input::ffmpeg_optioned(
-                detail.path.clone(),
-                &[],
-                &[
-                    "-f",
-                    "s16le",
-                    "-ac",
-                    if detail.is_stereo { "2" } else { "1" },
-                    "-ar",
-                    "48000",
-                    "-acodec",
-                    "pcm_f32le",
-                    "-af",
-                    &audio_filters.join(","),
-                    "-",
-                ],
-            )
-            .await
-            .expect("File should be in root folder."),
-        )
-        .expect("These parameters are well-defined.");
-        let _ = mem.raw.spawn_loader();
-        let source = CachedSound::Uncompressed(mem);
-        play_source((&source).into(), handler_lock.clone()).await;
-        sources.insert(sound, Arc::new(source)).await;
+    {
+        let sources = sources_lock.lock().await;
+        if let Some(source) = sources.get(&sound) {
+            play_source((&*source).into(), handler_lock.clone()).await;
+            return;
+        }
     }
+
+    let detail = {
+        let details = SOUND_DETAILS.read().await;
+        let detail_opt = details.get(&cmd.name);
+        if detail_opt.is_none() {
+            return;
+        }
+        detail_opt.unwrap().clone()
+    };
+
+    let audio_filters = [
+        format!("asetrate={}*{}/100", detail.sample_rate_hz, cmd.speed),
+        format!("aresample={}", detail.sample_rate_hz),
+    ];
+    let mem = Memory::new(
+        input::ffmpeg_optioned(
+            detail.path,
+            &[],
+            &[
+                "-f",
+                "s16le",
+                "-ac",
+                if detail.is_stereo { "2" } else { "1" },
+                "-ar",
+                "48000",
+                "-acodec",
+                "pcm_f32le",
+                "-af",
+                &audio_filters.join(","),
+                "-",
+            ],
+        )
+        .await
+        .expect("File should be in root folder."),
+    )
+    .expect("These parameters are well-defined.");
+    let _ = mem.raw.spawn_loader();
+    let source = CachedSound::Uncompressed(mem);
+    play_source((&source).into(), handler_lock.clone()).await;
+
+    let sources = sources_lock.lock().await;
+    sources.insert(sound, Arc::new(source)).await;
 }
 
 struct Handler;
@@ -271,7 +282,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
 
     {
-        let mut sound_details = SOUND_DETAILS.lock().await;
+        let mut sound_details = SOUND_DETAILS.write().await;
         *sound_details = load_sounds_try_from_cache(opt.sound_dir);
     }
 
@@ -476,7 +487,7 @@ fn check_msg(result: SerenityResult<Message>) {
 #[command]
 async fn s(ctx: &Context, msg: &Message) -> CommandResult {
     if let Some(query) = msg.content.split_whitespace().collect::<Vec<_>>().get(1) {
-        let lock = SOUND_DETAILS.lock().await;
+        let lock = SOUND_DETAILS.read().await;
         let mut sims: Vec<_> = lock
             .keys()
             .map(|k| (k, strsim::jaro_winkler(query, &k.to_lowercase())))
@@ -511,7 +522,7 @@ async fn r(ctx: &Context, msg: &Message) -> CommandResult {
         .unwrap_or("100")
         .parse::<u32>()
         .unwrap_or(100);
-    let lock = SOUND_DETAILS.lock().await;
+    let lock = SOUND_DETAILS.read().await;
     let names: Vec<_> = lock.keys().collect();
     let mut rng: StdRng = SeedableRng::from_entropy();
     if let Some(mut result) = names.choose(&mut rng).map(|r| r.to_string()) {
