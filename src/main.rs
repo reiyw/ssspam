@@ -496,15 +496,19 @@ async fn s(ctx: &Context, msg: &Message) -> CommandResult {
             .map(|k| (k, strsim::jaro_winkler(query, &k.to_lowercase())))
             .collect();
         sims.sort_by(|(_, d1), (_, d2)| d2.partial_cmp(d1).unwrap());
+        let mut ret: Vec<_> = sims.iter().filter(|(_, d)| d >= &0.85).take(50).collect();
+        ret = if ret.len() < 10 {
+            sims[..10].iter().collect()
+        } else {
+            ret
+        };
         check_msg(
             msg.channel_id
                 .say(
                     &ctx.http,
-                    &sims[..10]
-                        .iter()
-                        .cloned()
-                        .map(|(name, _)| name)
-                        .cloned()
+                    ret.iter()
+                        .map(|(name, _)| name.to_string())
+                        // .map(|(name, d)| format!("{} ({:.2})", name, d))
                         .collect::<Vec<_>>()
                         .join(", "),
                 )
