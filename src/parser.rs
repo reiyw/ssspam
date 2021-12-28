@@ -4,13 +4,14 @@ use pest::Parser;
 #[grammar = "say.pest"]
 pub struct SayCommandParser;
 
-#[derive(Debug, PartialEq, Eq, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, PartialOrd, Ord)]
 pub struct SayCommand {
     pub name: String,
     pub speed: u32,
 }
 
 impl SayCommand {
+    #[allow(dead_code)]
     fn new(name: String, speed: u32) -> Self {
         Self { name, speed }
     }
@@ -36,6 +37,7 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
             _ => unreachable!(),
         }
     }
+    cmds.sort();
     cmds.dedup();
     if cmds.len() > 10 {
         cmds.resize(10, SayCommand::default());
@@ -80,6 +82,17 @@ mod test {
                 SayCommand::new("b".into(), 10),
                 SayCommand::new("c".into(), 100),
                 SayCommand::new("d".into(), 999),
+            ]
+        );
+    }
+    #[test]
+    fn test_parser_dedup() {
+        let cmds = parse_say_commands("a; a; b; a").unwrap();
+        assert_eq!(
+            cmds,
+            vec![
+                SayCommand::new("a".into(), 100),
+                SayCommand::new("b".into(), 100),
             ]
         );
     }
