@@ -6,6 +6,7 @@ use std::{
 };
 
 use dotenv::dotenv;
+use futures::future::join_all;
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
@@ -167,9 +168,11 @@ impl EventHandler for Handler {
             .expect("Sound cache was installed at startup.");
 
         if let Some(handler_lock) = manager.get(guild_id) {
-            for cmd in cmds {
-                play_cmd(cmd, handler_lock.clone(), sources_lock.clone()).await;
-            }
+            join_all(
+                cmds.into_iter()
+                    .map(|cmd| play_cmd(cmd, handler_lock.clone(), sources_lock.clone())),
+            )
+            .await;
         }
     }
 
