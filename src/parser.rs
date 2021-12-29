@@ -37,8 +37,6 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
             _ => unreachable!(),
         }
     }
-    cmds.sort();
-    cmds.dedup();
     if cmds.len() > 10 {
         cmds.resize(10, SayCommand::default());
     }

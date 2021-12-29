@@ -2,7 +2,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
     path::PathBuf,
-    sync::Arc,
+    sync::Arc, time::Duration,
 };
 
 use dotenv::dotenv;
@@ -168,11 +168,10 @@ impl EventHandler for Handler {
             .expect("Sound cache was installed at startup.");
 
         if let Some(handler_lock) = manager.get(guild_id) {
-            join_all(
-                cmds.into_iter()
-                    .map(|cmd| play_cmd(cmd, handler_lock.clone(), sources_lock.clone())),
-            )
-            .await;
+            for cmd in cmds {
+                play_cmd(cmd, handler_lock.clone(), sources_lock.clone()).await;
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
         }
     }
 
