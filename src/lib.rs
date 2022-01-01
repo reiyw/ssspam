@@ -5,8 +5,10 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, SystemTime},
 };
 
+use chrono::{DateTime, FixedOffset, Utc};
 use counter::Counter;
 use glob::glob;
 #[macro_use]
@@ -27,15 +29,27 @@ pub struct SoundDetail {
     pub path: PathBuf,
     pub sample_rate_hz: u32,
     pub is_stereo: bool,
+
+    duration: Duration,
+    updated_at: SystemTime,
 }
 
 impl SoundDetail {
-    fn new(name: String, path: PathBuf, sample_rate_hz: u32, is_stereo: bool) -> Self {
+    fn new(
+        name: String,
+        path: PathBuf,
+        sample_rate_hz: u32,
+        is_stereo: bool,
+        duration: Duration,
+        updated_at: SystemTime,
+    ) -> Self {
         Self {
             name,
             path,
             sample_rate_hz,
             is_stereo,
+            duration,
+            updated_at,
         }
     }
 }
@@ -57,27 +71,33 @@ pub fn load_sounds<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<String, SoundDetail
         if data.is_err() {
             println!("invalid: {:?}", path);
         }
+        let data = data.unwrap();
 
-        let freqs: Counter<_> = data
-            .as_ref()
-            .unwrap()
-            .frames
-            .iter()
-            .map(|f| f.sampling_freq)
-            .collect();
+        let freqs: Counter<_> = data.frames.iter().map(|f| f.sampling_freq).collect();
         let sample_rate_hz = freqs.most_common()[0].0 as u32;
 
         let chan_types: Counter<_> = data
-            .unwrap()
             .frames
             .iter()
             .map(|f| f.chan_type == mp3_metadata::ChannelType::SingleChannel)
             .collect();
         let is_stereo = !chan_types.most_common()[0].0;
 
+        let updated_at = {
+            let metadata = fs::metadata(path.clone()).unwrap();
+            metadata.modified().unwrap()
+        };
+
         path_map.insert(
             ss_name.clone(),
-            SoundDetail::new(ss_name, path, sample_rate_hz, is_stereo),
+            SoundDetail::new(
+                ss_name,
+                path,
+                sample_rate_hz,
+                is_stereo,
+                data.duration,
+                updated_at,
+            ),
         );
     }
 
@@ -113,7 +133,11 @@ pub fn search_impl<S: AsRef<str>, T: AsRef<str>>(
         .collect();
     sims.sort_by(|(_, d1), (_, d2)| d2.partial_cmp(d1).unwrap());
 
-    let filtered: Vec<&(String, f64)> = sims.iter().filter(|(_, d)| d >= &0.85).take(max_results).collect();
+    let filtered: Vec<&(String, f64)> = sims
+        .iter()
+        .filter(|(_, d)| d >= &0.85)
+        .take(max_results)
+        .collect();
     if filtered.len() < 10 {
         sims[..10].to_vec()
     } else {
@@ -125,9 +149,16 @@ pub fn prettify_sounds(sounds: impl Iterator<Item = SoundDetail>) -> String {
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_CLEAN);
 
-    table.set_titles(row!["Name", "Sampling Rate"]);
+    table.set_titles(row!["Name", "Dur", "Updated"]);
     for sound in sounds {
-        table.add_row(row![sound.name, sound.sample_rate_hz]);
+        let updated_at: DateTime<Utc> = sound.updated_at.into();
+        let updated_at = updated_at.with_timezone(&FixedOffset::east(9 * 3600));
+
+        table.add_row(row![
+            sound.name,
+            sound.duration.as_millis(),
+            updated_at.format("%Y-%m-%d")
+        ]);
     }
 
     table.to_string()
