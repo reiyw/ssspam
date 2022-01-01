@@ -29,9 +29,9 @@ RUN apt-get update && apt-get install -y \
 
 RUN mkdir sound; \
     cd sound; \
-    wget https://storage.googleapis.com/surfpvparena/2021-12-25_2.zip; \
-    unzip 2021-12-25_2.zip; \
-    rm -f 2021-12-25_2.zip;
+    wget https://storage.googleapis.com/surfpvparena/2021-12-31.zip; \
+    unzip 2021-12-31.zip; \
+    rm -f 2021-12-31.zip;
 
 COPY --from=builder /app/target/release/preload /usr/local/bin
 RUN /usr/local/bin/preload --sound-dir /app/sound
