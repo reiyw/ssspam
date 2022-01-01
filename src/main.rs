@@ -7,7 +7,6 @@ use std::{
 };
 
 use dotenv::dotenv;
-use futures::future::join_all;
 use moka::future::Cache;
 use once_cell::sync::Lazy;
 use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
@@ -44,7 +43,7 @@ use structopt::StructOpt;
 use ssspambot::{
     load_sounds_try_from_cache,
     parser::{parse_say_commands, SayCommand},
-    play_source, search_impl, SoundDetail,
+    play_source, prettify_sounds, search_impl, SoundDetail,
 };
 
 static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
@@ -263,7 +262,7 @@ impl TypeMapKey for BotJoinningChannel {
 }
 
 #[group]
-#[commands(join, leave, mute, unmute, s, r, stop)]
+#[commands(join, leave, mute, unmute, s, st, r, stop)]
 struct General;
 
 #[derive(Debug, StructOpt)]
@@ -491,17 +490,31 @@ fn check_msg(result: SerenityResult<Message>) {
 async fn s(ctx: &Context, msg: &Message) -> CommandResult {
     if let Some(query) = msg.content.split_whitespace().collect::<Vec<_>>().get(1) {
         let lock = SOUND_DETAILS.read().await;
-        let ret = search_impl(*query, lock.keys());
+        let ret = search_impl(*query, lock.keys(), 30);
         check_msg(
             msg.channel_id
                 .say(
                     &ctx.http,
                     ret.iter()
                         .map(|(name, _)| name.to_string())
-                        // .map(|(name, d)| format!("{} ({:.2})", name, d))
                         .collect::<Vec<_>>()
                         .join(", "),
                 )
+                .await,
+        );
+    }
+    Ok(())
+}
+
+#[command]
+async fn st(ctx: &Context, msg: &Message) -> CommandResult {
+    if let Some(query) = msg.content.split_whitespace().collect::<Vec<_>>().get(1) {
+        let lock = SOUND_DETAILS.read().await;
+        let ret = search_impl(*query, lock.keys(), 10);
+        let out_msg = prettify_sounds(ret.iter().map(|(name, _)| lock.get(name).unwrap()).cloned());
+        check_msg(
+            msg.channel_id
+                .say(&ctx.http, format!("```\n{}\n```", out_msg))
                 .await,
         );
     }

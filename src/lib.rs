@@ -11,6 +11,9 @@ use counter::Counter;
 use glob::glob;
 #[macro_use]
 extern crate pest_derive;
+#[macro_use]
+extern crate prettytable;
+use prettytable::{format, Table};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use songbird::{create_player, input::Input, Call};
@@ -20,14 +23,16 @@ const VOLUME: f32 = 0.05;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SoundDetail {
+    name: String,
     pub path: PathBuf,
     pub sample_rate_hz: u32,
     pub is_stereo: bool,
 }
 
 impl SoundDetail {
-    fn new(path: PathBuf, sample_rate_hz: u32, is_stereo: bool) -> Self {
+    fn new(name: String, path: PathBuf, sample_rate_hz: u32, is_stereo: bool) -> Self {
         Self {
+            name,
             path,
             sample_rate_hz,
             is_stereo,
@@ -70,7 +75,10 @@ pub fn load_sounds<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<String, SoundDetail
             .collect();
         let is_stereo = !chan_types.most_common()[0].0;
 
-        path_map.insert(ss_name, SoundDetail::new(path, sample_rate_hz, is_stereo));
+        path_map.insert(
+            ss_name.clone(),
+            SoundDetail::new(ss_name, path, sample_rate_hz, is_stereo),
+        );
     }
 
     path_map
@@ -90,7 +98,11 @@ pub async fn play_source(source: Input, handler_lock: Arc<Mutex<Call>>) {
     handler.play(audio);
 }
 
-pub fn search_impl<S: AsRef<str>, T: AsRef<str>>(query: S, target: impl Iterator<Item = T>) -> Vec<(String, f64)> {
+pub fn search_impl<S: AsRef<str>, T: AsRef<str>>(
+    query: S,
+    target: impl Iterator<Item = T>,
+    max_results: usize,
+) -> Vec<(String, f64)> {
     let mut sims: Vec<_> = target
         .map(|t| {
             (
@@ -101,10 +113,22 @@ pub fn search_impl<S: AsRef<str>, T: AsRef<str>>(query: S, target: impl Iterator
         .collect();
     sims.sort_by(|(_, d1), (_, d2)| d2.partial_cmp(d1).unwrap());
 
-    let filtered: Vec<&(String, f64)> = sims.iter().filter(|(_, d)| d >= &0.85).take(50).collect();
+    let filtered: Vec<&(String, f64)> = sims.iter().filter(|(_, d)| d >= &0.85).take(max_results).collect();
     if filtered.len() < 10 {
         sims[..10].to_vec()
     } else {
         filtered.into_iter().cloned().collect()
     }
+}
+
+pub fn prettify_sounds(sounds: impl Iterator<Item = SoundDetail>) -> String {
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_CLEAN);
+
+    table.set_titles(row!["Name", "Sampling Rate"]);
+    for sound in sounds {
+        table.add_row(row![sound.name, sound.sample_rate_hz]);
+    }
+
+    table.to_string()
 }
