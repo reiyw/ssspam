@@ -2,7 +2,8 @@ use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
     path::PathBuf,
-    sync::Arc, time::Duration,
+    sync::Arc,
+    time::Duration,
 };
 
 use dotenv::dotenv;
@@ -43,7 +44,7 @@ use structopt::StructOpt;
 use ssspambot::{
     load_sounds_try_from_cache,
     parser::{parse_say_commands, SayCommand},
-    play_source, SoundDetail,
+    play_source, search_impl, SoundDetail,
 };
 
 static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
@@ -490,17 +491,7 @@ fn check_msg(result: SerenityResult<Message>) {
 async fn s(ctx: &Context, msg: &Message) -> CommandResult {
     if let Some(query) = msg.content.split_whitespace().collect::<Vec<_>>().get(1) {
         let lock = SOUND_DETAILS.read().await;
-        let mut sims: Vec<_> = lock
-            .keys()
-            .map(|k| (k, strsim::jaro_winkler(query, &k.to_lowercase())))
-            .collect();
-        sims.sort_by(|(_, d1), (_, d2)| d2.partial_cmp(d1).unwrap());
-        let mut ret: Vec<_> = sims.iter().filter(|(_, d)| d >= &0.85).take(50).collect();
-        ret = if ret.len() < 10 {
-            sims[..10].iter().collect()
-        } else {
-            ret
-        };
+        let ret = search_impl(*query, lock.keys());
         check_msg(
             msg.channel_id
                 .say(

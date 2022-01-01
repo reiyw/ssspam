@@ -89,3 +89,22 @@ pub async fn play_source(source: Input, handler_lock: Arc<Mutex<Call>>) {
     let mut handler = handler_lock.lock().await;
     handler.play(audio);
 }
+
+pub fn search_impl<S: AsRef<str>, T: AsRef<str>>(query: S, target: impl Iterator<Item = T>) -> Vec<(String, f64)> {
+    let mut sims: Vec<_> = target
+        .map(|t| {
+            (
+                t.as_ref().to_string(),
+                strsim::jaro_winkler(query.as_ref(), &t.as_ref().to_lowercase()),
+            )
+        })
+        .collect();
+    sims.sort_by(|(_, d1), (_, d2)| d2.partial_cmp(d1).unwrap());
+
+    let filtered: Vec<&(String, f64)> = sims.iter().filter(|(_, d)| d >= &0.85).take(50).collect();
+    if filtered.len() < 10 {
+        sims[..10].to_vec()
+    } else {
+        filtered.into_iter().cloned().collect()
+    }
+}
