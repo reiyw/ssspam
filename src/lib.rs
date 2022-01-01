@@ -152,12 +152,13 @@ pub fn prettify_sounds(sounds: impl Iterator<Item = SoundDetail>) -> String {
     table.set_titles(row!["Name", "Dur", "Updated"]);
     for sound in sounds {
         let updated_at: DateTime<Utc> = sound.updated_at.into();
-        let updated_at = updated_at.with_timezone(&FixedOffset::east(9 * 3600));
+        // let updated_at = updated_at.with_timezone(&FixedOffset::east(9 * 3600));
 
         table.add_row(row![
             sound.name,
             sound.duration.as_millis(),
             updated_at.format("%Y-%m-%d")
+            // updated_at.format("%Y-%m-%d %T")
         ]);
     }
 
