@@ -156,9 +156,8 @@ pub fn prettify_sounds(sounds: impl Iterator<Item = SoundDetail>) -> String {
 
         table.add_row(row![
             sound.name,
-            sound.duration.as_millis(),
-            updated_at.format("%Y-%m-%d")
-            // updated_at.format("%Y-%m-%d %T")
+            format!("{:.1}", sound.duration.as_secs_f64()),
+            updated_at.format("%Y-%m-%d") // updated_at.format("%Y-%m-%d %T")
         ]);
     }
 
