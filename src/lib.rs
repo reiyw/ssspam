@@ -8,7 +8,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, Utc};
 use counter::Counter;
 use glob::glob;
 #[macro_use]
