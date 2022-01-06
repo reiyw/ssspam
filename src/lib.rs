@@ -25,7 +25,7 @@ const VOLUME: f32 = 0.05;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SoundDetail {
-    name: String,
+    pub name: String,
     pub path: PathBuf,
     pub sample_rate_hz: u32,
     pub is_stereo: bool,
@@ -89,7 +89,7 @@ pub fn load_sounds<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<String, SoundDetail
         };
 
         path_map.insert(
-            ss_name.clone(),
+            ss_name.clone().to_lowercase(),
             SoundDetail::new(
                 ss_name,
                 path,

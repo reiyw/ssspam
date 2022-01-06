@@ -54,7 +54,7 @@ async fn play_cmd(
     handler_lock: Arc<tokio::sync::Mutex<Call>>,
     sources_lock: Arc<tokio::sync::Mutex<Cache<SoundInfo, Arc<CachedSound>>>>,
 ) {
-    let sound = SoundInfo::new(cmd.name.clone(), cmd.speed);
+    let sound = SoundInfo::new(cmd.name.clone().to_lowercase(), cmd.speed);
 
     {
         let sources = sources_lock.lock().await;
@@ -66,7 +66,7 @@ async fn play_cmd(
 
     let detail = {
         let details = SOUND_DETAILS.read().await;
-        let detail_opt = details.get(&cmd.name);
+        let detail_opt = details.get(&cmd.name.to_lowercase());
         if detail_opt.is_none() {
             return;
         }
@@ -490,7 +490,7 @@ fn check_msg(result: SerenityResult<Message>) {
 async fn s(ctx: &Context, msg: &Message) -> CommandResult {
     if let Some(query) = msg.content.split_whitespace().collect::<Vec<_>>().get(1) {
         let lock = SOUND_DETAILS.read().await;
-        let ret = search_impl(*query, lock.keys(), 30);
+        let ret = search_impl(*query, lock.values().map(|v| &v.name), 30);
         check_msg(
             msg.channel_id
                 .say(
