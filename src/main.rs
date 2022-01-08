@@ -39,6 +39,7 @@ use songbird::{
     Call, SerenityInit,
 };
 use structopt::StructOpt;
+use systemstat::{Platform, System};
 
 use ssspambot::{
     load_sounds_try_from_cache,
@@ -262,7 +263,7 @@ impl TypeMapKey for BotJoinningChannel {
 }
 
 #[group]
-#[commands(join, leave, mute, unmute, s, st, r, stop)]
+#[commands(join, leave, mute, unmute, s, st, r, stop, uptime)]
 struct General;
 
 #[derive(Debug, StructOpt)]
@@ -566,5 +567,20 @@ async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
     let mut handler = handler_lock.lock().await;
     handler.stop();
 
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+async fn uptime(ctx: &Context, msg: &Message) -> CommandResult {
+    let sys = System::new();
+    check_msg(
+        msg.channel_id
+            .say(
+                &ctx.http,
+                humantime::format_duration(sys.uptime().unwrap()).to_string(),
+            )
+            .await,
+    );
     Ok(())
 }
