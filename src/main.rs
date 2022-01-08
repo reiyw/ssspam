@@ -263,7 +263,7 @@ impl TypeMapKey for BotJoinningChannel {
 }
 
 #[group]
-#[commands(join, leave, mute, unmute, s, st, r, stop, uptime)]
+#[commands(join, leave, mute, unmute, s, st, r, stop, uptime, cpu)]
 struct General;
 
 #[derive(Debug, StructOpt)]
@@ -579,6 +579,31 @@ async fn uptime(ctx: &Context, msg: &Message) -> CommandResult {
             .say(
                 &ctx.http,
                 humantime::format_duration(sys.uptime().unwrap()).to_string(),
+            )
+            .await,
+    );
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+async fn cpu(ctx: &Context, msg: &Message) -> CommandResult {
+    let sys = System::new();
+    let cpu = sys.cpu_load_aggregate().unwrap();
+    std::thread::sleep(Duration::from_secs(1));
+    let cpu = cpu.done().unwrap();
+    check_msg(
+        msg.channel_id
+            .say(
+                &ctx.http,
+                format!(
+                    "CPU load: {:.1}% user, {:.1}% nice, {:.1}% system, {:.1}% intr, {:.1}% idle ",
+                    cpu.user * 100.0,
+                    cpu.nice * 100.0,
+                    cpu.system * 100.0,
+                    cpu.interrupt * 100.0,
+                    cpu.idle * 100.0
+                ),
             )
             .await,
     );
