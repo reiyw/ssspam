@@ -520,23 +520,25 @@ async fn st(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 async fn r(ctx: &Context, msg: &Message) -> CommandResult {
-    let speed = msg
-        .content
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .get(1)
-        .map(|s| s.to_owned())
-        .unwrap_or("100")
-        .parse::<u32>()
-        .unwrap_or(100);
     let lock = SOUND_DETAILS.read().await;
     let names: Vec<_> = lock.keys().collect();
     let mut rng: StdRng = SeedableRng::from_entropy();
-    if let Some(mut result) = names.choose(&mut rng).map(|r| r.to_string()) {
-        if speed != 100 {
-            result += &format!(" {}", speed);
+    if let Some(mut cmd) = names.choose(&mut rng).map(|r| r.to_string()) {
+        if msg.content.len() > 1 {
+            cmd += &msg.content[2..];
         }
-        check_msg(msg.channel_id.say(&ctx.http, result).await);
+        if let Ok(cmds) = parse_say_commands(&cmd) {
+            if let Some(cmd) = cmds.get(0) {
+                let mut result = cmd.name.clone();
+                if cmd.speed != 100 {
+                    result += &format!(" @{}", cmd.speed);
+                }
+                if cmd.pitch != 100 {
+                    result += &format!(" p{}", cmd.pitch);
+                }
+                check_msg(msg.channel_id.say(&ctx.http, result).await);
+            }
+        }
     }
 
     Ok(())
