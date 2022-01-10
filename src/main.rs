@@ -36,7 +36,7 @@ use songbird::{
         cached::{Compressed, Memory},
         Input,
     },
-    Call, SerenityInit,
+    SerenityInit,
 };
 use structopt::StructOpt;
 use systemstat::{Platform, System};
@@ -50,28 +50,24 @@ use ssspambot::{
 static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| RwLock::new(BTreeMap::new()));
 
-async fn play_cmd(
+async fn get_or_make_source(
     cmd: SayCommand,
-    handler_lock: Arc<tokio::sync::Mutex<Call>>,
     sources_lock: Arc<tokio::sync::Mutex<Cache<SayCommand, Arc<CachedSound>>>>,
-) {
+) -> Option<Arc<CachedSound>> {
     let cmd = SayCommand::new(cmd.name.to_lowercase(), cmd.speed, cmd.pitch);
 
     {
         let sources = sources_lock.lock().await;
-        if let Some(source) = sources.get(&cmd) {
-            play_source((&*source).into(), handler_lock.clone()).await;
-            return;
+        let source = sources.get(&cmd);
+        if source.is_some() {
+            return source;
         }
     }
 
     let detail = {
         let details = SOUND_DETAILS.read().await;
-        let detail_opt = details.get(&cmd.name.to_lowercase());
-        if detail_opt.is_none() {
-            return;
-        }
-        detail_opt.unwrap().clone()
+        let detail_opt = details.get(&cmd.name.to_lowercase())?;
+        detail_opt.clone()
     };
 
     let audio_filters = {
@@ -110,10 +106,9 @@ async fn play_cmd(
     .expect("These parameters are well-defined.");
     let _ = mem.raw.spawn_loader();
     let source = CachedSound::Uncompressed(mem);
-    play_source((&source).into(), handler_lock.clone()).await;
-
     let sources = sources_lock.lock().await;
-    sources.insert(cmd, Arc::new(source)).await;
+    sources.insert(cmd.clone(), Arc::new(source)).await;
+    sources.get(&cmd)
 }
 
 struct Handler;
@@ -177,8 +172,14 @@ impl EventHandler for Handler {
             .expect("Sound cache was installed at startup.");
 
         if let Some(handler_lock) = manager.get(guild_id) {
+            let mut sources: Vec<Arc<CachedSound>> = Vec::new();
             for cmd in cmds {
-                play_cmd(cmd, handler_lock.clone(), sources_lock.clone()).await;
+                if let Some(source) = get_or_make_source(cmd, sources_lock.clone()).await {
+                    sources.push(source);
+                }
+            }
+            for source in sources {
+                play_source((&*source).into(), handler_lock.clone()).await;
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
         }
