@@ -53,13 +53,13 @@ static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
 async fn play_cmd(
     cmd: SayCommand,
     handler_lock: Arc<tokio::sync::Mutex<Call>>,
-    sources_lock: Arc<tokio::sync::Mutex<Cache<SoundInfo, Arc<CachedSound>>>>,
+    sources_lock: Arc<tokio::sync::Mutex<Cache<SayCommand, Arc<CachedSound>>>>,
 ) {
-    let sound = SoundInfo::new(cmd.name.clone().to_lowercase(), cmd.speed);
+    let cmd = SayCommand::new(cmd.name.to_lowercase(), cmd.speed, cmd.pitch);
 
     {
         let sources = sources_lock.lock().await;
-        if let Some(source) = sources.get(&sound) {
+        if let Some(source) = sources.get(&cmd) {
             play_source((&*source).into(), handler_lock.clone()).await;
             return;
         }
@@ -74,10 +74,18 @@ async fn play_cmd(
         detail_opt.unwrap().clone()
     };
 
-    let audio_filters = [
-        format!("asetrate={}*{}/100", detail.sample_rate_hz, cmd.speed),
-        format!("aresample={}", detail.sample_rate_hz),
-    ];
+    let audio_filters = {
+        let speed_multiplier = cmd.speed as f64 / 100.0;
+        let pitch_multiplier = cmd.pitch as f64 / 100.0;
+        let asetrate = detail.sample_rate_hz as f64 * speed_multiplier * pitch_multiplier;
+        let atempo = 1.0 / pitch_multiplier;
+        [
+            format!("asetrate={}", asetrate),
+            format!("atempo={}", atempo),
+            format!("aresample={}", detail.sample_rate_hz),
+        ]
+    };
+
     let mem = Memory::new(
         input::ffmpeg_optioned(
             detail.path,
@@ -105,7 +113,7 @@ async fn play_cmd(
     play_source((&source).into(), handler_lock.clone()).await;
 
     let sources = sources_lock.lock().await;
-    sources.insert(sound, Arc::new(source)).await;
+    sources.insert(cmd, Arc::new(source)).await;
 }
 
 struct Handler;
@@ -238,22 +246,10 @@ impl From<&CachedSound> for Input {
     }
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
-struct SoundInfo {
-    name: String,
-    speed: u32,
-}
-
-impl SoundInfo {
-    const fn new(name: String, speed: u32) -> Self {
-        Self { name, speed }
-    }
-}
-
 struct SoundStore;
 
 impl TypeMapKey for SoundStore {
-    type Value = Arc<Mutex<Cache<SoundInfo, Arc<CachedSound>>>>;
+    type Value = Arc<Mutex<Cache<SayCommand, Arc<CachedSound>>>>;
 }
 
 struct BotJoinningChannel;
