@@ -31,7 +31,12 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                     for option in options.into_inner() {
                         match option.as_rule() {
                             Rule::speed => {
-                                speed = option.as_str().parse().unwrap();
+                                let start = if option.as_str().starts_with('@') {
+                                    1
+                                } else {
+                                    0
+                                };
+                                speed = option.as_str()[start..].parse().unwrap();
                             }
                             Rule::pitch => {
                                 pitch = option.as_str()[1..].parse().unwrap();
@@ -72,6 +77,9 @@ mod test {
         assert_eq!(cmds, vec![SayCommand::new("a".into(), 100, 100),]);
 
         let cmds = parse_say_commands(" a 50 ").unwrap();
+        assert_eq!(cmds, vec![SayCommand::new("a".into(), 50, 100),]);
+
+        let cmds = parse_say_commands(" a @50 ").unwrap();
         assert_eq!(cmds, vec![SayCommand::new("a".into(), 50, 100),]);
 
         let cmds = parse_say_commands(" a 50; ").unwrap();
