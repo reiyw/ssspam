@@ -1,4 +1,4 @@
 .env
 secret.yaml
-# /sound
 /target
+/dist

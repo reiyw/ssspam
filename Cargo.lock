@@ -37,6 +37,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84450d0b4a8bd1ba4144ce8ce718fbc5d071358b1e5384bace6536b3d1f2d5b3"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1067,6 +1073,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
 
 [[package]]
+name = "maud"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7384febb4f8fc970cc2efab1650a6f48cac2e79b0b29587c90497b646fb10e1e"
+dependencies = [
+ "maud_macros",
+]
+
+[[package]]
+name = "maud_macros"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "423430ac467408136d7de93f2929debd8a7bc3e795c92476f45e259b158e3355"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "maybe-uninit"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1888,9 +1915,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.73"
+version = "1.0.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcbd0344bc6533bc7ec56df11d42fb70f1b912351c0825ccb7211b59d8af7cf5"
+checksum = "ee2bb9cd061c5865d345bb02ca49fcef1391741b672b54a0bf7b679badec3142"
 dependencies = [
  "itoa 1.0.1",
  "ryu",
@@ -2102,6 +2129,7 @@ dependencies = [
 name = "ssspambot"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bincode",
  "chrono",
  "counter",
@@ -2109,6 +2137,7 @@ dependencies = [
  "futures",
  "glob",
  "humantime",
+ "maud",
  "moka",
  "mp3-metadata",
  "once_cell",
@@ -2118,6 +2147,7 @@ dependencies = [
  "rand 0.8.4",
  "regex",
  "serde",
+ "serde_json",
  "serenity",
  "songbird",
  "strsim 0.10.0",

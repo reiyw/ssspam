@@ -30,8 +30,8 @@ pub struct SoundDetail {
     pub sample_rate_hz: u32,
     pub is_stereo: bool,
 
-    duration: Duration,
-    updated_at: SystemTime,
+    pub duration: Duration,
+    pub updated_at: SystemTime,
 }
 
 impl SoundDetail {
