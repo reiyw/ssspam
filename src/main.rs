@@ -299,7 +299,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let mut data = client.data.write().await;
-        data.insert::<SoundStore>(Arc::new(Mutex::new(Cache::new(50))));
+        data.insert::<SoundStore>(Arc::new(Mutex::new(
+            Cache::builder()
+                .max_capacity(50)
+                .time_to_idle(Duration::from_secs(10 * 60))
+                .build(),
+        )));
     }
 
     {
