@@ -37,7 +37,7 @@ fn main() -> anyhow::Result<()> {
                 script src="https://cdn.jsdelivr.net/npm/bulma-slider@2.0.4/dist/js/bulma-slider.min.js" {}
 
                 link rel="stylesheet" type="text/css" href="DataTables-1.11.3/css/dataTables.bulma.min.css" {}
- 
+
                 script type="text/javascript" src="jQuery-3.6.0/jquery-3.6.0.min.js" {}
                 script type="text/javascript" src="DataTables-1.11.3/js/jquery.dataTables.min.js" {}
                 script type="text/javascript" src="DataTables-1.11.3/js/dataTables.bulma.js" {}
