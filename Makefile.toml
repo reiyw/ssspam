@@ -1,0 +1,22 @@
+[tasks.upload_sounds]
+script_runner = "python"
+script_extension = "py"
+script = '''
+import datetime
+import os
+import shutil
+import subprocess
+
+os.chdir(tmpdir)
+
+today = datetime.date.today().isoformat()
+dest = today + '.zip'
+shutil.make_archive(today, 'zip', root_dir='dist/sound')
+
+subprocess.run(['gsutil', 'cp', dest, f'gs://surfpvparena/{dest}'])
+
+os.remove(dest)
+'''
+
+[tasks.update_server]
+# todo
