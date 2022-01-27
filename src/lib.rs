@@ -8,6 +8,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use counter::Counter;
 use glob::glob;
@@ -16,7 +17,6 @@ extern crate pest_derive;
 #[macro_use]
 extern crate prettytable;
 use prettytable::{format, Table};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use songbird::{create_player, input::Input, Call};
 use tokio::sync::Mutex;
@@ -52,21 +52,17 @@ impl SoundDetail {
             updated_at,
         }
     }
-}
 
-pub fn load_sounds<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<String, SoundDetail> {
-    let mut path_map = BTreeMap::new();
+    fn from_mp3(path: &Path) -> Result<Self> {
+        let ss_name = path
+            .file_stem()
+            .context("file name must exist")?
+            .to_str()
+            .context("failed to convert OsStr to str")?
+            .to_string();
 
-    for path in
-        (glob(&format!("{}/*.mp3", sound_dir.as_ref().to_str().unwrap())).unwrap()).flatten()
-    {
-        let ss_name = path.file_stem().unwrap().to_str().unwrap().to_string();
-
-        let data = mp3_metadata::read_from_file(path.clone());
-        if data.is_err() {
-            println!("invalid: {:?}", path);
-        }
-        let data = data.unwrap();
+        let data = mp3_metadata::read_from_file(path)
+            .with_context(|| format!("failed to read metadata: {:?}", path))?;
 
         let freqs: Counter<_> = data.frames.iter().map(|f| f.sampling_freq).collect();
         let sample_rate_hz = freqs.most_common()[0].0 as u32;
@@ -79,21 +75,33 @@ pub fn load_sounds<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<String, SoundDetail
         let is_stereo = !chan_types.most_common()[0].0;
 
         let updated_at = {
-            let metadata = fs::metadata(path.clone()).unwrap();
+            let metadata = fs::metadata(path)?;
             metadata.modified().unwrap()
         };
 
-        path_map.insert(
-            ss_name.clone().to_lowercase(),
-            SoundDetail::new(
-                ss_name,
-                path,
-                sample_rate_hz,
-                is_stereo,
-                data.duration,
-                updated_at,
-            ),
-        );
+        Ok(SoundDetail::new(
+            ss_name,
+            path.to_path_buf(),
+            sample_rate_hz,
+            is_stereo,
+            data.duration,
+            updated_at,
+        ))
+    }
+}
+
+pub fn load_sounds<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<String, SoundDetail> {
+    let mut path_map = BTreeMap::new();
+
+    for path in
+        (glob(&format!("{}/*.mp3", sound_dir.as_ref().to_str().unwrap())).unwrap()).flatten()
+    {
+        match SoundDetail::from_mp3(&path) {
+            Ok(sound) => {
+                path_map.insert(sound.name.clone().to_lowercase(), sound);
+            }
+            Err(e) => eprintln!("Failed to read metadata from {:?}. Reason: {}", path, e),
+        }
     }
 
     path_map
