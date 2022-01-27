@@ -90,7 +90,7 @@ async fn get_or_make_source(
                 "-f",
                 "s16le",
                 "-ac",
-                if detail.is_stereo { "2" } else { "1" },
+                &detail.channel_count.to_string(),
                 "-ar",
                 "48000",
                 "-acodec",

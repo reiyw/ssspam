@@ -28,7 +28,7 @@ pub struct SoundDetail {
     pub name: String,
     pub path: PathBuf,
     pub sample_rate_hz: u32,
-    pub is_stereo: bool,
+    pub channel_count: u8,
 
     pub duration: Duration,
     pub updated_at: SystemTime,
@@ -39,7 +39,7 @@ impl SoundDetail {
         name: String,
         path: PathBuf,
         sample_rate_hz: u32,
-        is_stereo: bool,
+        channel_count: u8,
         duration: Duration,
         updated_at: SystemTime,
     ) -> Self {
@@ -47,7 +47,7 @@ impl SoundDetail {
             name,
             path,
             sample_rate_hz,
-            is_stereo,
+            channel_count,
             duration,
             updated_at,
         }
@@ -67,12 +67,16 @@ impl SoundDetail {
         let freqs: Counter<_> = data.frames.iter().map(|f| f.sampling_freq).collect();
         let sample_rate_hz = freqs.most_common()[0].0 as u32;
 
-        let chan_types: Counter<_> = data
+        let channel_counts: Counter<_> = data
             .frames
             .iter()
-            .map(|f| f.chan_type == mp3_metadata::ChannelType::SingleChannel)
+            .map(|f| match f.chan_type {
+                mp3_metadata::ChannelType::SingleChannel => 1,
+                // FIXME: I'm not sure this logic is correct.
+                _ => 2,
+            })
             .collect();
-        let is_stereo = !chan_types.most_common()[0].0;
+        let channel_count = channel_counts.most_common()[0].0;
 
         let updated_at = fs::metadata(path)?.modified()?;
 
@@ -80,8 +84,42 @@ impl SoundDetail {
             ss_name,
             path.to_path_buf(),
             sample_rate_hz,
-            is_stereo,
+            channel_count,
             data.duration,
+            updated_at,
+        ))
+    }
+
+    fn from_m4a(path: &Path) -> Result<Self> {
+        let ss_name = path
+            .file_stem()
+            .context("file name must exist")?
+            .to_str()
+            .context("failed to convert OsStr to str")?
+            .to_string();
+
+        let data = mp4ameta::Tag::read_from_path(path)?;
+
+        let sample_rate_hz = data
+            .sample_rate()
+            .context("failed to load a samping rate")?
+            .hz();
+
+        let channel_count = data
+            .channel_config()
+            .context("failed to load a channel count")?
+            .channel_count();
+
+        let duration = data.duration().context("failed to load a duration")?;
+
+        let updated_at = fs::metadata(path)?.modified()?;
+
+        Ok(SoundDetail::new(
+            ss_name,
+            path.to_path_buf(),
+            sample_rate_hz,
+            channel_count,
+            duration,
             updated_at,
         ))
     }
@@ -90,10 +128,23 @@ impl SoundDetail {
 pub fn load_sounds<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<String, SoundDetail> {
     let mut path_map = BTreeMap::new();
 
-    for path in
-        (glob(&format!("{}/*.mp3", sound_dir.as_ref().to_str().unwrap())).unwrap()).flatten()
+    for path in (glob(&format!("{}/*.mp3", sound_dir.as_ref().to_string_lossy()))
+        .expect("Failed to read glob pattern"))
+    .flatten()
     {
         match SoundDetail::from_mp3(&path) {
+            Ok(sound) => {
+                path_map.insert(sound.name.clone().to_lowercase(), sound);
+            }
+            Err(e) => eprintln!("Failed to read metadata from {:?}. Reason: {}", path, e),
+        }
+    }
+
+    for path in (glob(&format!("{}/*.m4a", sound_dir.as_ref().to_string_lossy()))
+        .expect("Failed to read glob pattern"))
+    .flatten()
+    {
+        match SoundDetail::from_m4a(&path) {
             Ok(sound) => {
                 path_map.insert(sound.name.clone().to_lowercase(), sound);
             }
