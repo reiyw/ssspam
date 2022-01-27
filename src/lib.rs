@@ -74,10 +74,7 @@ impl SoundDetail {
             .collect();
         let is_stereo = !chan_types.most_common()[0].0;
 
-        let updated_at = {
-            let metadata = fs::metadata(path)?;
-            metadata.modified().unwrap()
-        };
+        let updated_at = fs::metadata(path)?.modified()?;
 
         Ok(SoundDetail::new(
             ss_name,
