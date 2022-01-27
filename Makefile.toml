@@ -1,4 +1,4 @@
-[tasks.upload_sounds]
+[tasks.upload-sounds]
 script_runner = "python"
 script_extension = "py"
 script = '''
@@ -18,5 +18,19 @@ subprocess.run(['gsutil', 'cp', dest, f'gs://surfpvparena/{dest}'])
 os.remove(dest)
 '''
 
-[tasks.update_server]
+[tasks.convert-mp3-to-m4a]
+script_runner = "python"
+script_extension = "py"
+script = '''
+import pathlib
+import subprocess
+
+for infile in pathlib.Path('dist/sound').glob('*.mp3'):
+    outfile = pathlib.Path(f'dist/m4a/{infile.stem}.m4a')
+    if not outfile.exists():
+        cmd = ['ffmpeg', '-i', str(infile), str(outfile)]
+        subprocess.run(cmd, capture_output=True)
+'''
+
+[tasks.update-server]
 # todo
