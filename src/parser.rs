@@ -38,8 +38,7 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
             Rule::cmd => {
                 let mut cmd = cmd.into_inner();
                 let name = cmd.next().unwrap().as_str().into();
-                let mut speed = 100;
-                let mut pitch = 100;
+                let mut saycmd = SayCommandBuilder::default().name(name).build().unwrap();
                 for options in cmd {
                     for option in options.into_inner() {
                         match option.as_rule() {
@@ -49,10 +48,22 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                                 } else {
                                     0
                                 };
-                                speed = option.as_str()[start..].parse().unwrap();
+                                let speed = option.as_str()[start..].parse().unwrap();
+                                if (10..=999).contains(&speed) {
+                                    saycmd.speed = speed;
+                                }
                             }
                             Rule::pitch => {
-                                pitch = option.as_str()[1..].parse().unwrap();
+                                let pitch = option.as_str()[1..].parse().unwrap();
+                                if (10..=999).contains(&pitch) {
+                                    saycmd.pitch = pitch;
+                                }
+                            }
+                            Rule::wait => {
+                                let wait = option.as_str()[1..].parse().unwrap();
+                                if (10..=999).contains(&wait) {
+                                    saycmd.wait = wait;
+                                }
                             }
                             _ => {
                                 unreachable!();
@@ -60,9 +71,7 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                         }
                     }
                 }
-                if (10..=999).contains(&speed) && (10..=999).contains(&pitch) {
-                    cmds.push(SayCommand { name, speed, pitch, wait: 50 });
-                }
+                cmds.push(saycmd);
             }
             Rule::EOI => (),
             _ => unreachable!(),
@@ -158,6 +167,10 @@ mod test {
             cmds,
             vec![
                 SayCommandBuilder::default()
+                    .name("a".into())
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
                     .name("b".into())
                     .speed(10)
                     .build()
@@ -169,6 +182,10 @@ mod test {
                 SayCommandBuilder::default()
                     .name("d".into())
                     .speed(999)
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("e".into())
                     .build()
                     .unwrap(),
             ]
