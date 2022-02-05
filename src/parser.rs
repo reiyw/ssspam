@@ -201,71 +201,17 @@ mod test {
 
     #[test]
     fn test_parser_with_all_options() {
-        let cmds = parse_say_commands("a 10 p20 w30").unwrap();
+        let cmds = parse_say_commands("a 10 p20 w3.0 s").unwrap();
         assert_eq!(
             cmds,
             vec![SayCommandBuilder::default()
                 .name("a".into())
                 .speed(10)
                 .pitch(20)
-                .wait(30)
+                .wait(3000)
+                .stop(true)
                 .build()
                 .unwrap()]
-        );
-
-        let cmds = parse_say_commands("a w30 p20 10").unwrap();
-        assert_eq!(
-            cmds,
-            vec![SayCommandBuilder::default()
-                .name("a".into())
-                .speed(10)
-                .pitch(20)
-                .wait(30)
-                .build()
-                .unwrap()]
-        );
-
-        let cmds = parse_say_commands("a 20 10 p10 p20").unwrap();
-        assert_eq!(
-            cmds,
-            vec![SayCommandBuilder::default()
-                .name("a".into())
-                .speed(10)
-                .pitch(20)
-                .build()
-                .unwrap()]
-        );
-
-        let cmds = parse_say_commands("a p10 20 p20 10").unwrap();
-        assert_eq!(
-            cmds,
-            vec![SayCommandBuilder::default()
-                .name("a".into())
-                .speed(10)
-                .pitch(20)
-                .build()
-                .unwrap()]
-        );
-
-        let cmds = parse_say_commands("a 10 p20 w30; b p10 w20 30").unwrap();
-        assert_eq!(
-            cmds,
-            vec![
-                SayCommandBuilder::default()
-                    .name("a".into())
-                    .speed(10)
-                    .pitch(20)
-                    .wait(30)
-                    .build()
-                    .unwrap(),
-                SayCommandBuilder::default()
-                    .name("b".into())
-                    .speed(30)
-                    .pitch(10)
-                    .wait(20)
-                    .build()
-                    .unwrap(),
-            ]
         );
     }
 }
