@@ -197,7 +197,10 @@ impl EventHandler for Handler {
                     Action::Concat => {
                         let details = SOUND_DETAILS.read().await;
                         let detail = details.get(&cmd.name.to_lowercase()).unwrap();
-                        tokio::time::sleep(detail.duration).await;
+                        let duration =
+                            (detail.duration.as_millis() as f64) * (100.0 / cmd.speed as f64);
+                        let wait = duration - cmd.start as f64;
+                        tokio::time::sleep(Duration::from_millis(wait as u64)).await;
                     }
                 }
                 if cmd.stop {
