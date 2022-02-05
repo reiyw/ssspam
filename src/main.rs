@@ -54,7 +54,13 @@ async fn get_or_make_source(
     cmd: &SayCommand,
     sources_lock: Arc<tokio::sync::Mutex<Cache<SayCommand, Arc<CachedSound>>>>,
 ) -> Option<Arc<CachedSound>> {
-    let cmd = SayCommand::new(cmd.name.to_lowercase(), cmd.speed, cmd.pitch, cmd.wait);
+    let cmd = SayCommand::new(
+        cmd.name.to_lowercase(),
+        cmd.speed,
+        cmd.pitch,
+        cmd.wait,
+        cmd.stop,
+    );
 
     {
         let sources = sources_lock.lock().await;
@@ -173,16 +179,17 @@ impl EventHandler for Handler {
 
         if let Some(handler_lock) = manager.get(guild_id) {
             let mut sources: Vec<Arc<CachedSound>> = Vec::new();
-            let mut waits: Vec<u32> = Vec::new();
-            for cmd in cmds {
-                if let Some(source) = get_or_make_source(&cmd, sources_lock.clone()).await {
+            for cmd in &cmds {
+                if let Some(source) = get_or_make_source(cmd, sources_lock.clone()).await {
                     sources.push(source);
-                    waits.push(cmd.wait);
                 }
             }
-            for (source, wait) in sources.into_iter().zip(waits.into_iter()) {
-                play_source((&*source).into(), handler_lock.clone()).await;
-                tokio::time::sleep(Duration::from_millis(wait as u64)).await;
+            for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
+                let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
+                tokio::time::sleep(Duration::from_millis(cmd.wait as u64)).await;
+                if cmd.stop {
+                    track_handle.stop().ok();
+                }
             }
         }
     }

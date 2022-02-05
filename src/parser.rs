@@ -11,22 +11,24 @@ pub struct SayCommand {
     pub speed: u32,
     pub pitch: u32,
     pub wait: u32,
+    pub stop: bool,
 }
 
 impl SayCommand {
-    pub fn new(name: String, speed: u32, pitch: u32, wait: u32) -> Self {
+    pub fn new(name: String, speed: u32, pitch: u32, wait: u32, stop: bool) -> Self {
         Self {
             name,
             speed,
             pitch,
             wait,
+            stop,
         }
     }
 }
 
 impl Default for SayCommand {
     fn default() -> Self {
-        Self::new("".into(), 100, 100, 50)
+        Self::new("".into(), 100, 100, 50, false)
     }
 }
 
@@ -60,10 +62,14 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                                 }
                             }
                             Rule::wait => {
-                                let wait = option.as_str()[1..].parse().unwrap();
-                                if (10..=999).contains(&wait) {
+                                let wait: f64 = option.as_str()[1..].parse().unwrap();
+                                let wait = (wait * 1000.0).round() as u32;
+                                if (10..=30000).contains(&wait) {
                                     saycmd.wait = wait;
                                 }
+                            }
+                            Rule::stop => {
+                                saycmd.stop = true;
                             }
                             _ => {
                                 unreachable!();
@@ -194,24 +200,26 @@ mod test {
 
     #[test]
     fn test_parser_with_all_options() {
-        let cmds = parse_say_commands("a 10 p20").unwrap();
+        let cmds = parse_say_commands("a 10 p20 w30").unwrap();
         assert_eq!(
             cmds,
             vec![SayCommandBuilder::default()
                 .name("a".into())
                 .speed(10)
                 .pitch(20)
+                .wait(30)
                 .build()
                 .unwrap()]
         );
 
-        let cmds = parse_say_commands("a p20 10").unwrap();
+        let cmds = parse_say_commands("a w30 p20 10").unwrap();
         assert_eq!(
             cmds,
             vec![SayCommandBuilder::default()
                 .name("a".into())
                 .speed(10)
                 .pitch(20)
+                .wait(30)
                 .build()
                 .unwrap()]
         );
@@ -238,7 +246,7 @@ mod test {
                 .unwrap()]
         );
 
-        let cmds = parse_say_commands("a 10 p20; b p10 20").unwrap();
+        let cmds = parse_say_commands("a 10 p20 w30; b p10 w20 30").unwrap();
         assert_eq!(
             cmds,
             vec![
@@ -246,12 +254,14 @@ mod test {
                     .name("a".into())
                     .speed(10)
                     .pitch(20)
+                    .wait(30)
                     .build()
                     .unwrap(),
                 SayCommandBuilder::default()
                     .name("b".into())
-                    .speed(20)
+                    .speed(30)
                     .pitch(10)
+                    .wait(20)
                     .build()
                     .unwrap(),
             ]

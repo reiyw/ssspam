@@ -20,7 +20,7 @@ extern crate pest_derive;
 extern crate prettytable;
 use prettytable::{format, Table};
 use serde::{Deserialize, Serialize};
-use songbird::{create_player, input::Input, Call};
+use songbird::{create_player, input::Input, tracks::TrackHandle, Call};
 use tokio::sync::Mutex;
 
 const VOLUME: f32 = 0.05;
@@ -164,11 +164,12 @@ pub fn load_sounds_try_from_cache<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<Stri
     }
 }
 
-pub async fn play_source(source: Input, handler_lock: Arc<Mutex<Call>>) {
-    let (mut audio, _audio_handle) = create_player(source);
+pub async fn play_source(source: Input, handler_lock: Arc<Mutex<Call>>) -> TrackHandle {
+    let (mut audio, audio_handle) = create_player(source);
     audio.set_volume(VOLUME);
     let mut handler = handler_lock.lock().await;
     handler.play(audio);
+    audio_handle
 }
 
 pub fn search_impl<S: AsRef<str>, T: AsRef<str>>(
