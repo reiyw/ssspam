@@ -51,10 +51,10 @@ static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| RwLock::new(BTreeMap::new()));
 
 async fn get_or_make_source(
-    cmd: SayCommand,
+    cmd: &SayCommand,
     sources_lock: Arc<tokio::sync::Mutex<Cache<SayCommand, Arc<CachedSound>>>>,
 ) -> Option<Arc<CachedSound>> {
-    let cmd = SayCommand::new(cmd.name.to_lowercase(), cmd.speed, cmd.pitch);
+    let cmd = SayCommand::new(cmd.name.to_lowercase(), cmd.speed, cmd.pitch, cmd.wait);
 
     {
         let sources = sources_lock.lock().await;
@@ -173,14 +173,16 @@ impl EventHandler for Handler {
 
         if let Some(handler_lock) = manager.get(guild_id) {
             let mut sources: Vec<Arc<CachedSound>> = Vec::new();
+            let mut waits: Vec<u32> = Vec::new();
             for cmd in cmds {
-                if let Some(source) = get_or_make_source(cmd, sources_lock.clone()).await {
+                if let Some(source) = get_or_make_source(&cmd, sources_lock.clone()).await {
                     sources.push(source);
+                    waits.push(cmd.wait);
                 }
             }
-            for source in sources {
+            for (source, wait) in sources.into_iter().zip(waits.into_iter()) {
                 play_source((&*source).into(), handler_lock.clone()).await;
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                tokio::time::sleep(Duration::from_millis(wait as u64)).await;
             }
         }
     }

@@ -11,6 +11,8 @@ use std::{
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use counter::Counter;
+#[macro_use]
+extern crate derive_builder;
 use glob::glob;
 #[macro_use]
 extern crate pest_derive;

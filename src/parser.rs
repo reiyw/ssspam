@@ -4,16 +4,29 @@ use pest::Parser;
 #[grammar = "say.pest"]
 pub struct SayCommandParser;
 
-#[derive(Debug, PartialEq, Eq, Default, Clone, PartialOrd, Ord, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Builder)]
+#[builder(default)]
 pub struct SayCommand {
     pub name: String,
     pub speed: u32,
     pub pitch: u32,
+    pub wait: u32,
 }
 
 impl SayCommand {
-    pub fn new(name: String, speed: u32, pitch: u32) -> Self {
-        Self { name, speed, pitch }
+    pub fn new(name: String, speed: u32, pitch: u32, wait: u32) -> Self {
+        Self {
+            name,
+            speed,
+            pitch,
+            wait,
+        }
+    }
+}
+
+impl Default for SayCommand {
+    fn default() -> Self {
+        Self::new("".into(), 100, 100, 50)
     }
 }
 
@@ -48,7 +61,7 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                     }
                 }
                 if (10..=999).contains(&speed) && (10..=999).contains(&pitch) {
-                    cmds.push(SayCommand { name, speed, pitch });
+                    cmds.push(SayCommand { name, speed, pitch, wait: 50 });
                 }
             }
             Rule::EOI => (),
@@ -68,29 +81,75 @@ mod test {
     #[test]
     fn test_parser() {
         let cmds = parse_say_commands("a").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 100, 100),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands(" a ").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 100, 100),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands(" a ;").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 100, 100),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands(" a 50 ").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 50, 100),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .speed(50)
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands(" a @50 ").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 50, 100),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .speed(50)
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands(" a 50; ").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 50, 100),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .speed(50)
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands("a; b 50;").unwrap();
         assert_eq!(
             cmds,
             vec![
-                SayCommand::new("a".into(), 100, 100),
-                SayCommand::new("b".into(), 50, 100)
+                SayCommandBuilder::default()
+                    .name("a".into())
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("b".into())
+                    .speed(50)
+                    .build()
+                    .unwrap(),
             ]
         );
 
@@ -98,9 +157,20 @@ mod test {
         assert_eq!(
             cmds,
             vec![
-                SayCommand::new("b".into(), 10, 100),
-                SayCommand::new("c".into(), 100, 100),
-                SayCommand::new("d".into(), 999, 100),
+                SayCommandBuilder::default()
+                    .name("b".into())
+                    .speed(10)
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("c".into())
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("d".into())
+                    .speed(999)
+                    .build()
+                    .unwrap(),
             ]
         );
     }
@@ -108,23 +178,65 @@ mod test {
     #[test]
     fn test_parser_with_all_options() {
         let cmds = parse_say_commands("a 10 p20").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 10, 20),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .speed(10)
+                .pitch(20)
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands("a p20 10").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 10, 20),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .speed(10)
+                .pitch(20)
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands("a 20 10 p10 p20").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 10, 20),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .speed(10)
+                .pitch(20)
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands("a p10 20 p20 10").unwrap();
-        assert_eq!(cmds, vec![SayCommand::new("a".into(), 10, 20),]);
+        assert_eq!(
+            cmds,
+            vec![SayCommandBuilder::default()
+                .name("a".into())
+                .speed(10)
+                .pitch(20)
+                .build()
+                .unwrap()]
+        );
 
         let cmds = parse_say_commands("a 10 p20; b p10 20").unwrap();
         assert_eq!(
             cmds,
             vec![
-                SayCommand::new("a".into(), 10, 20),
-                SayCommand::new("b".into(), 20, 10),
+                SayCommandBuilder::default()
+                    .name("a".into())
+                    .speed(10)
+                    .pitch(20)
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("b".into())
+                    .speed(20)
+                    .pitch(10)
+                    .build()
+                    .unwrap(),
             ]
         );
     }
