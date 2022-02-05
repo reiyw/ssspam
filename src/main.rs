@@ -183,7 +183,12 @@ impl EventHandler for Handler {
                 }
             }
             for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
-                let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
+                let track_handle = play_source(
+                    (&*source).into(),
+                    handler_lock.clone(),
+                    Duration::from_millis(cmd.start as u64),
+                )
+                .await;
 
                 match cmd.action {
                     Action::Synthesize => {

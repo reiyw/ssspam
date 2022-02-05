@@ -164,9 +164,14 @@ pub fn load_sounds_try_from_cache<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<Stri
     }
 }
 
-pub async fn play_source(source: Input, handler_lock: Arc<Mutex<Call>>) -> TrackHandle {
+pub async fn play_source(
+    source: Input,
+    handler_lock: Arc<Mutex<Call>>,
+    position: Duration,
+) -> TrackHandle {
     let (mut audio, audio_handle) = create_player(source);
     audio.set_volume(VOLUME);
+    audio.seek_time(position).ok();
     let mut handler = handler_lock.lock().await;
     handler.play(audio);
     audio_handle

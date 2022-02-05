@@ -11,6 +11,7 @@ pub struct SayCommand {
     pub speed: u32,
     pub pitch: u32,
     pub wait: u32,
+    pub start: u32,
     pub stop: bool,
     pub action: Action,
 }
@@ -21,6 +22,7 @@ impl SayCommand {
         speed: u32,
         pitch: u32,
         wait: u32,
+        start: u32,
         stop: bool,
         action: Action,
     ) -> Self {
@@ -29,6 +31,7 @@ impl SayCommand {
             speed,
             pitch,
             wait,
+            start,
             stop,
             action,
         }
@@ -37,7 +40,7 @@ impl SayCommand {
 
 impl Default for SayCommand {
     fn default() -> Self {
-        Self::new("".into(), 100, 100, 50, false, Action::Synthesize)
+        Self::new("".into(), 100, 100, 50, 0, false, Action::Synthesize)
     }
 }
 
@@ -82,6 +85,12 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                                     if (10..=30000).contains(&wait) {
                                         saycmd.wait = wait;
                                     }
+                                }
+                            }
+                            Rule::start => {
+                                if let Ok(start) = option.as_str()[1..].parse::<f64>() {
+                                    let start = (start * 1000.0).round() as u32;
+                                    saycmd.start = start;
                                 }
                             }
                             Rule::stop => {
@@ -230,7 +239,7 @@ mod test {
 
     #[test]
     fn test_parser_with_all_options() {
-        let cmds = parse_say_commands("a 10 p20 w3.0 s").unwrap();
+        let cmds = parse_say_commands("a 10 p20 w3.0 s4.0 s").unwrap();
         assert_eq!(
             cmds,
             vec![SayCommandBuilder::default()
@@ -238,6 +247,7 @@ mod test {
                 .speed(10)
                 .pitch(20)
                 .wait(3000)
+                .start(4000)
                 .stop(true)
                 .build()
                 .unwrap()]
