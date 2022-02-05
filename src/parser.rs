@@ -12,24 +12,39 @@ pub struct SayCommand {
     pub pitch: u32,
     pub wait: u32,
     pub stop: bool,
+    pub action: Action,
 }
 
 impl SayCommand {
-    pub fn new(name: String, speed: u32, pitch: u32, wait: u32, stop: bool) -> Self {
+    pub fn new(
+        name: String,
+        speed: u32,
+        pitch: u32,
+        wait: u32,
+        stop: bool,
+        action: Action,
+    ) -> Self {
         Self {
             name,
             speed,
             pitch,
             wait,
             stop,
+            action,
         }
     }
 }
 
 impl Default for SayCommand {
     fn default() -> Self {
-        Self::new("".into(), 100, 100, 50, false)
+        Self::new("".into(), 100, 100, 50, false, Action::Synthesize)
     }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
+pub enum Action {
+    Synthesize,
+    Concat,
 }
 
 pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::Error<Rule>> {
@@ -80,6 +95,13 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                 }
                 cmds.push(saycmd);
             }
+            Rule::delimiter => {
+                if cmd.as_str() == "|" {
+                    let mut saycmd = cmds.pop().unwrap();
+                    saycmd.action = Action::Concat;
+                    cmds.push(saycmd);
+                }
+            }
             Rule::EOI => (),
             _ => unreachable!(),
         }
@@ -87,6 +109,13 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
     if cmds.len() > 10 {
         cmds.resize(10, SayCommand::default());
     }
+
+    {
+        let mut saycmd = cmds.pop().unwrap();
+        saycmd.action = Action::Synthesize;
+        cmds.push(saycmd);
+    }
+
     Ok(cmds)
 }
 
@@ -212,6 +241,36 @@ mod test {
                 .stop(true)
                 .build()
                 .unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_delimiter() {
+        let cmds = parse_say_commands("a;b|c|d|").unwrap();
+        assert_eq!(
+            cmds,
+            vec![
+                SayCommandBuilder::default()
+                    .name("a".into())
+                    .action(Action::Synthesize)
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("b".into())
+                    .action(Action::Concat)
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("c".into())
+                    .action(Action::Concat)
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("d".into())
+                    .action(Action::Synthesize)
+                    .build()
+                    .unwrap(),
+            ]
         );
     }
 }

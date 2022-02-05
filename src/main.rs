@@ -43,7 +43,7 @@ use systemstat::{Platform, System};
 
 use ssspambot::{
     load_sounds_try_from_cache,
-    parser::{parse_say_commands, SayCommand},
+    parser::{parse_say_commands, Action, SayCommand},
     play_source, prettify_sounds, search_impl, SoundDetail,
 };
 
@@ -54,13 +54,11 @@ async fn get_or_make_source(
     cmd: &SayCommand,
     sources_lock: Arc<tokio::sync::Mutex<Cache<SayCommand, Arc<CachedSound>>>>,
 ) -> Option<Arc<CachedSound>> {
-    let cmd = SayCommand::new(
-        cmd.name.to_lowercase(),
-        cmd.speed,
-        cmd.pitch,
-        cmd.wait,
-        cmd.stop,
-    );
+    let cmd = {
+        let mut cmd = cmd.clone();
+        cmd.name = cmd.name.to_lowercase();
+        cmd
+    };
 
     {
         let sources = sources_lock.lock().await;
@@ -186,7 +184,17 @@ impl EventHandler for Handler {
             }
             for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
                 let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
-                tokio::time::sleep(Duration::from_millis(cmd.wait as u64)).await;
+
+                match cmd.action {
+                    Action::Synthesize => {
+                        tokio::time::sleep(Duration::from_millis(cmd.wait as u64)).await;
+                    }
+                    Action::Concat => {
+                        let details = SOUND_DETAILS.read().await;
+                        let detail = details.get(&cmd.name.to_lowercase()).unwrap();
+                        tokio::time::sleep(detail.duration).await;
+                    }
+                }
                 if cmd.stop {
                     track_handle.stop().ok();
                 }
