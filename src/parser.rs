@@ -62,10 +62,11 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                                 }
                             }
                             Rule::wait => {
-                                let wait: f64 = option.as_str()[1..].parse().unwrap();
-                                let wait = (wait * 1000.0).round() as u32;
-                                if (10..=30000).contains(&wait) {
-                                    saycmd.wait = wait;
+                                if let Ok(wait) = option.as_str()[1..].parse::<f64>() {
+                                    let wait = (wait * 1000.0).round() as u32;
+                                    if (10..=30000).contains(&wait) {
+                                        saycmd.wait = wait;
+                                    }
                                 }
                             }
                             Rule::stop => {
