@@ -128,7 +128,7 @@ async fn get_or_make_source(
     sources.get(&cmd)
 }
 
-async fn process_message(ctx: Context, msg: Message) {
+async fn process_message(ctx: &Context, msg: &Message) {
     // Allow saysound-spam channel at css server or general channel at my server.
     if !(msg.channel_id == 921678977662332928 || msg.channel_id == 391743739430699010) {
         return;
@@ -167,7 +167,7 @@ async fn process_message(ctx: Context, msg: Message) {
         return;
     }
 
-    let manager = songbird::get(&ctx)
+    let manager = songbird::get(ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
@@ -185,6 +185,7 @@ async fn process_message(ctx: Context, msg: Message) {
         for cmd in &cmds {
             sources.push(get_or_make_source(cmd, sources_lock.clone()).await);
         }
+
         for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
             match source {
                 Some(source) => {
@@ -234,9 +235,11 @@ impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
         let mut lock = MESSAGE_BROADCAST_RECEIVER.lock().await;
         let task = lock.changed();
+
         tokio::select! {
-            _ = process_message(ctx, msg) => (),
+            _ = process_message(&ctx, &msg) => (),
             _ = task => (),
+            _ = async {tokio::time::sleep(Duration::from_secs(60)).await;} => stop_impl(&ctx, &msg).await,
         }
     }
 
@@ -614,6 +617,11 @@ async fn r(ctx: &Context, msg: &Message) -> CommandResult {
 #[command]
 #[only_in(guilds)]
 async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
+    stop_impl(ctx, msg).await;
+    Ok(())
+}
+
+async fn stop_impl(ctx: &Context, msg: &Message) {
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
 
@@ -625,8 +633,7 @@ async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
         Some(handler) => handler,
         None => {
             check_msg(msg.reply(ctx, "Not in a voice channel").await);
-
-            return Ok(());
+            return;
         }
     };
     let mut handler = handler_lock.lock().await;
@@ -634,8 +641,6 @@ async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
 
     let lock = MESSAGE_BROADCAST_CONNECT.lock().await;
     lock.send(true).ok();
-
-    Ok(())
 }
 
 #[command]

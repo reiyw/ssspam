@@ -113,7 +113,7 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                     }
                 }
 
-                if !saycmd.name.starts_with("~") {
+                if !saycmd.name.starts_with('~') {
                     say_cmd_count += 1;
                 }
 
