@@ -12,6 +12,7 @@ pub struct SayCommand {
     pub pitch: u32,
     pub wait: u32,
     pub start: u32,
+    pub duration: Option<u32>,
     pub stop: bool,
     pub action: Action,
 }
@@ -23,6 +24,7 @@ impl SayCommand {
         pitch: u32,
         wait: u32,
         start: u32,
+        duration: Option<u32>,
         stop: bool,
         action: Action,
     ) -> Self {
@@ -32,6 +34,7 @@ impl SayCommand {
             pitch,
             wait,
             start,
+            duration,
             stop,
             action,
         }
@@ -40,7 +43,7 @@ impl SayCommand {
 
 impl Default for SayCommand {
     fn default() -> Self {
-        Self::new("".into(), 100, 100, 50, 0, false, Action::Synthesize)
+        Self::new("".into(), 100, 100, 50, 0, None, false, Action::Synthesize)
     }
 }
 
@@ -91,6 +94,12 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                                 if let Ok(start) = option.as_str()[1..].parse::<f64>() {
                                     let start = (start * 1000.0).round() as u32;
                                     saycmd.start = start;
+                                }
+                            }
+                            Rule::duration => {
+                                if let Ok(duration) = option.as_str()[1..].parse::<f64>() {
+                                    let duration = (duration * 1000.0).round() as u32;
+                                    saycmd.duration = Some(duration);
                                 }
                             }
                             Rule::stop => {

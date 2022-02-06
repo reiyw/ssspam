@@ -1,4 +1,5 @@
 use std::{
+    cmp,
     collections::{BTreeMap, HashMap},
     convert::TryInto,
     path::PathBuf,
@@ -86,10 +87,15 @@ async fn get_or_make_source(
         ]
     };
 
+    let t_opt_value = match cmd.duration {
+        Some(dur) => format!("{}ms", dur),
+        None => "0".to_string(),
+    };
+
     let mem = Memory::new(
         input::ffmpeg_optioned(
             detail.path,
-            &[],
+            &["-ss", &format!("{}ms", cmd.start), "-t", &t_opt_value],
             &[
                 "-f",
                 "s16le",
@@ -183,12 +189,7 @@ impl EventHandler for Handler {
                 }
             }
             for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
-                let track_handle = play_source(
-                    (&*source).into(),
-                    handler_lock.clone(),
-                    Duration::from_millis(cmd.start as u64),
-                )
-                .await;
+                let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
 
                 match cmd.action {
                     Action::Synthesize => {
@@ -199,7 +200,12 @@ impl EventHandler for Handler {
                         let detail = details.get(&cmd.name.to_lowercase()).unwrap();
                         let duration =
                             (detail.duration.as_millis() as f64) * (100.0 / cmd.speed as f64);
-                        let wait = duration - cmd.start as f64;
+                        let duration = duration as i64;
+                        let mut wait = duration - cmd.start as i64;
+                        dbg!(&cmd);
+                        if let Some(dur) = cmd.duration {
+                            wait = cmp::min(wait, dur as i64)
+                        }
                         tokio::time::sleep(Duration::from_millis(wait as u64)).await;
                     }
                 }
