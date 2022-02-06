@@ -1,5 +1,5 @@
 WHITESPACE = _{ " " }
-sound_name = @{ (ASCII_ALPHANUMERIC | "-" | "_" | "^" | "!" | "~")+ }
+sound_name = @{ (ASCII_ALPHANUMERIC | "-" | "_" | "^" | "!" | "~" | ".")+ }
 speed = @{ "@"? ~ ASCII_DIGIT+ }
 pitch = @{ "p" ~ ASCII_DIGIT+ }
 wait = @{ "w" ~ (ASCII_DIGIT | ".")+ }

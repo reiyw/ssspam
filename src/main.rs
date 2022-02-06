@@ -53,9 +53,9 @@ static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| RwLock::new(BTreeMap::new()));
 
 // TODO: manage for each guild
-static MESSAGE_BROADCAST_CONNECT: Lazy<Mutex<watch::Sender<bool>>> = 
+static MESSAGE_BROADCAST_CONNECT: Lazy<Mutex<watch::Sender<bool>>> =
     Lazy::new(|| Mutex::new(watch::channel(false).0));
-static MESSAGE_BROADCAST_RECEIVER: Lazy<Mutex<watch::Receiver<bool>>> = 
+static MESSAGE_BROADCAST_RECEIVER: Lazy<Mutex<watch::Receiver<bool>>> =
     Lazy::new(|| Mutex::new(watch::channel(false).1));
 
 async fn get_or_make_source(
@@ -181,34 +181,43 @@ async fn process_message(ctx: Context, msg: Message) {
         .expect("Sound cache was installed at startup.");
 
     if let Some(handler_lock) = manager.get(guild_id) {
-        let mut sources: Vec<Arc<CachedSound>> = Vec::new();
+        let mut sources: Vec<Option<Arc<CachedSound>>> = Vec::new();
         for cmd in &cmds {
-            if let Some(source) = get_or_make_source(cmd, sources_lock.clone()).await {
-                sources.push(source);
-            }
+            sources.push(get_or_make_source(cmd, sources_lock.clone()).await);
         }
         for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
-            let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
+            match source {
+                Some(source) => {
+                    let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
 
-            match cmd.action {
-                Action::Synthesize => {
-                    tokio::time::sleep(Duration::from_millis(cmd.wait as u64)).await;
-                }
-                Action::Concat => {
-                    let details = SOUND_DETAILS.read().await;
-                    let detail = details.get(&cmd.name.to_lowercase()).unwrap();
-                    let duration =
-                        (detail.duration.as_millis() as f64) * (100.0 / cmd.speed as f64);
-                    let duration = duration as i64;
-                    let mut wait = duration - cmd.start as i64;
-                    if let Some(dur) = cmd.duration {
-                        wait = cmp::min(wait, dur as i64)
+                    match cmd.action {
+                        Action::Synthesize => {
+                            tokio::time::sleep(Duration::from_millis(cmd.wait as u64)).await;
+                        }
+                        Action::Concat => {
+                            let details = SOUND_DETAILS.read().await;
+                            let detail = details.get(&cmd.name.to_lowercase()).unwrap();
+                            let duration =
+                                (detail.duration.as_millis() as f64) * (100.0 / cmd.speed as f64);
+                            let duration = duration as i64;
+                            let mut wait = duration - cmd.start as i64;
+                            if let Some(dur) = cmd.duration {
+                                wait = cmp::min(wait, dur as i64)
+                            }
+                            tokio::time::sleep(Duration::from_millis(wait as u64)).await;
+                        }
                     }
-                    tokio::time::sleep(Duration::from_millis(wait as u64)).await;
+                    if cmd.stop {
+                        track_handle.stop().ok();
+                    }
                 }
-            }
-            if cmd.stop {
-                track_handle.stop().ok();
+                None => {
+                    // FIXME: too error-prone
+                    if cmd.name.starts_with("~w") {
+                        let wait = cmd.name[2..].parse::<f64>().unwrap() * 1000.0;
+                        tokio::time::sleep(Duration::from_millis(wait as u64)).await;
+                    }
+                }
             }
         }
     }
