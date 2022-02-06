@@ -47,9 +47,16 @@ use ssspambot::{
     parser::{parse_say_commands, Action, SayCommand},
     play_source, prettify_sounds, search_impl, SoundDetail,
 };
+use tokio::sync::watch;
 
 static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| RwLock::new(BTreeMap::new()));
+
+// TODO: manage for each guild
+static MESSAGE_BROADCAST_CONNECT: Lazy<Mutex<watch::Sender<bool>>> = 
+    Lazy::new(|| Mutex::new(watch::channel(false).0));
+static MESSAGE_BROADCAST_RECEIVER: Lazy<Mutex<watch::Receiver<bool>>> = 
+    Lazy::new(|| Mutex::new(watch::channel(false).1));
 
 async fn get_or_make_source(
     cmd: &SayCommand,
@@ -121,6 +128,92 @@ async fn get_or_make_source(
     sources.get(&cmd)
 }
 
+async fn process_message(ctx: Context, msg: Message) {
+    // Allow saysound-spam channel at css server or general channel at my server.
+    if !(msg.channel_id == 921678977662332928 || msg.channel_id == 391743739430699010) {
+        return;
+    }
+
+    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild_id = guild.id;
+
+    let authors_voice_channel_id = guild
+        .voice_states
+        .get(&msg.author.id)
+        .and_then(|voice_state| voice_state.channel_id);
+
+    let bots_voice_channel_id = ctx
+        .data
+        .read()
+        .await
+        .get::<BotJoinningChannel>()
+        .cloned()
+        .unwrap()
+        .lock()
+        .await
+        .get(&guild_id)
+        .cloned();
+
+    if authors_voice_channel_id != bots_voice_channel_id {
+        return;
+    }
+
+    let cmds = parse_say_commands(&msg.content);
+    if cmds.is_err() {
+        return;
+    }
+    let cmds = cmds.unwrap();
+    if cmds.is_empty() {
+        return;
+    }
+
+    let manager = songbird::get(&ctx)
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    let sources_lock = ctx
+        .data
+        .read()
+        .await
+        .get::<SoundStore>()
+        .cloned()
+        .expect("Sound cache was installed at startup.");
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let mut sources: Vec<Arc<CachedSound>> = Vec::new();
+        for cmd in &cmds {
+            if let Some(source) = get_or_make_source(cmd, sources_lock.clone()).await {
+                sources.push(source);
+            }
+        }
+        for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
+            let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
+
+            match cmd.action {
+                Action::Synthesize => {
+                    tokio::time::sleep(Duration::from_millis(cmd.wait as u64)).await;
+                }
+                Action::Concat => {
+                    let details = SOUND_DETAILS.read().await;
+                    let detail = details.get(&cmd.name.to_lowercase()).unwrap();
+                    let duration =
+                        (detail.duration.as_millis() as f64) * (100.0 / cmd.speed as f64);
+                    let duration = duration as i64;
+                    let mut wait = duration - cmd.start as i64;
+                    if let Some(dur) = cmd.duration {
+                        wait = cmp::min(wait, dur as i64)
+                    }
+                    tokio::time::sleep(Duration::from_millis(wait as u64)).await;
+                }
+            }
+            if cmd.stop {
+                track_handle.stop().ok();
+            }
+        }
+    }
+}
+
 struct Handler;
 
 #[async_trait]
@@ -130,88 +223,11 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        // Allow saysound-spam channel at css server or general channel at my server.
-        if !(msg.channel_id == 921678977662332928 || msg.channel_id == 391743739430699010) {
-            return;
-        }
-
-        let guild = msg.guild(&ctx.cache).await.unwrap();
-        let guild_id = guild.id;
-
-        let authors_voice_channel_id = guild
-            .voice_states
-            .get(&msg.author.id)
-            .and_then(|voice_state| voice_state.channel_id);
-
-        let bots_voice_channel_id = ctx
-            .data
-            .read()
-            .await
-            .get::<BotJoinningChannel>()
-            .cloned()
-            .unwrap()
-            .lock()
-            .await
-            .get(&guild_id)
-            .cloned();
-
-        if authors_voice_channel_id != bots_voice_channel_id {
-            return;
-        }
-
-        let cmds = parse_say_commands(&msg.content);
-        if cmds.is_err() {
-            return;
-        }
-        let cmds = cmds.unwrap();
-        if cmds.is_empty() {
-            return;
-        }
-
-        let manager = songbird::get(&ctx)
-            .await
-            .expect("Songbird Voice client placed in at initialisation.")
-            .clone();
-
-        let sources_lock = ctx
-            .data
-            .read()
-            .await
-            .get::<SoundStore>()
-            .cloned()
-            .expect("Sound cache was installed at startup.");
-
-        if let Some(handler_lock) = manager.get(guild_id) {
-            let mut sources: Vec<Arc<CachedSound>> = Vec::new();
-            for cmd in &cmds {
-                if let Some(source) = get_or_make_source(cmd, sources_lock.clone()).await {
-                    sources.push(source);
-                }
-            }
-            for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
-                let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
-
-                match cmd.action {
-                    Action::Synthesize => {
-                        tokio::time::sleep(Duration::from_millis(cmd.wait as u64)).await;
-                    }
-                    Action::Concat => {
-                        let details = SOUND_DETAILS.read().await;
-                        let detail = details.get(&cmd.name.to_lowercase()).unwrap();
-                        let duration =
-                            (detail.duration.as_millis() as f64) * (100.0 / cmd.speed as f64);
-                        let duration = duration as i64;
-                        let mut wait = duration - cmd.start as i64;
-                        if let Some(dur) = cmd.duration {
-                            wait = cmp::min(wait, dur as i64)
-                        }
-                        tokio::time::sleep(Duration::from_millis(wait as u64)).await;
-                    }
-                }
-                if cmd.stop {
-                    track_handle.stop().ok();
-                }
-            }
+        let mut lock = MESSAGE_BROADCAST_RECEIVER.lock().await;
+        let task = lock.changed();
+        tokio::select! {
+            _ = process_message(ctx, msg) => (),
+            _ = task => (),
         }
     }
 
@@ -340,6 +356,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let mut data = client.data.write().await;
         data.insert::<BotJoinningChannel>(Arc::new(Mutex::new(HashMap::new())));
+    }
+
+    {
+        let (tx, rx) = watch::channel::<bool>(false);
+        *MESSAGE_BROADCAST_CONNECT.lock().await = tx;
+        *MESSAGE_BROADCAST_RECEIVER.lock().await = rx;
     }
 
     let shard_manager = client.shard_manager.clone();
@@ -600,6 +622,9 @@ async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
     };
     let mut handler = handler_lock.lock().await;
     handler.stop();
+
+    let lock = MESSAGE_BROADCAST_CONNECT.lock().await;
+    lock.send(true).ok();
 
     Ok(())
 }
