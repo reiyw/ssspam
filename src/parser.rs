@@ -56,6 +56,7 @@ pub enum Action {
 pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::Error<Rule>> {
     let result = SayCommandParser::parse(Rule::cmds, input)?.next().unwrap();
     let mut cmds = Vec::new();
+    let mut say_cmd_count = 0;
     for cmd in result.into_inner() {
         match cmd.as_rule() {
             Rule::cmd => {
@@ -111,6 +112,11 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
                         }
                     }
                 }
+
+                if !saycmd.name.starts_with("~") {
+                    say_cmd_count += 1;
+                }
+
                 cmds.push(saycmd);
             }
             Rule::delimiter => {
@@ -123,9 +129,10 @@ pub fn parse_say_commands(input: &str) -> Result<Vec<SayCommand>, pest::error::E
             Rule::EOI => (),
             _ => unreachable!(),
         }
-    }
-    if cmds.len() > 10 {
-        cmds.resize(10, SayCommand::default());
+
+        if say_cmd_count == 10 {
+            break;
+        }
     }
 
     {
