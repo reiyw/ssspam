@@ -47,16 +47,16 @@ use ssspambot::{
     parser::{parse_say_commands, Action, SayCommand},
     play_source, prettify_sounds, search_impl, SoundDetail,
 };
-use tokio::sync::watch;
+use tokio::sync::broadcast;
 
 static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| RwLock::new(BTreeMap::new()));
 
 // TODO: manage for each guild
-static MESSAGE_BROADCAST_CONNECT: Lazy<Mutex<watch::Sender<bool>>> =
-    Lazy::new(|| Mutex::new(watch::channel(false).0));
-static MESSAGE_BROADCAST_RECEIVER: Lazy<Mutex<watch::Receiver<bool>>> =
-    Lazy::new(|| Mutex::new(watch::channel(false).1));
+static MESSAGE_BROADCAST_CONNECT: Lazy<RwLock<broadcast::Sender<bool>>> =
+    Lazy::new(|| RwLock::new(broadcast::channel(16).0));
+static MESSAGE_BROADCAST_RECEIVER: Lazy<Mutex<broadcast::Receiver<bool>>> =
+    Lazy::new(|| Mutex::new(broadcast::channel(16).1));
 
 async fn get_or_make_source(
     cmd: &SayCommand,
@@ -233,12 +233,12 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        let mut lock = MESSAGE_BROADCAST_RECEIVER.lock().await;
-        let task = lock.changed();
+        let lock = MESSAGE_BROADCAST_CONNECT.read().await;
+        let mut rx = lock.subscribe();
 
         tokio::select! {
             _ = process_message(&ctx, &msg) => (),
-            _ = task => (),
+            _ = rx.recv() => (),
             _ = async {tokio::time::sleep(Duration::from_secs(60)).await;} => stop_impl(&ctx, &msg).await,
         }
     }
@@ -371,8 +371,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     {
-        let (tx, rx) = watch::channel::<bool>(false);
-        *MESSAGE_BROADCAST_CONNECT.lock().await = tx;
+        let (tx, rx) = broadcast::channel::<bool>(16);
+        *MESSAGE_BROADCAST_CONNECT.write().await = tx;
         *MESSAGE_BROADCAST_RECEIVER.lock().await = rx;
     }
 
@@ -639,7 +639,7 @@ async fn stop_impl(ctx: &Context, msg: &Message) {
     let mut handler = handler_lock.lock().await;
     handler.stop();
 
-    let lock = MESSAGE_BROADCAST_CONNECT.lock().await;
+    let lock = MESSAGE_BROADCAST_CONNECT.read().await;
     lock.send(true).ok();
 }
 
