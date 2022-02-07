@@ -246,12 +246,12 @@ impl EventHandler for Handler {
     async fn voice_state_update(
         &self,
         ctx: Context,
-        _: Option<GuildId>,
+        guild_id: Option<GuildId>,
         old_state: Option<VoiceState>,
         _: VoiceState,
     ) {
         if let Some(old_state) = old_state {
-            let guild_id = old_state.guild_id.unwrap();
+            let guild_id = guild_id.unwrap();
             let bots_voice_channel_id = ctx
                 .data
                 .read()
