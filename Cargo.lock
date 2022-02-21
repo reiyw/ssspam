@@ -2232,6 +2232,7 @@ dependencies = [
  "moka",
  "mp3-metadata",
  "mp4ameta",
+ "nom",
  "once_cell",
  "pest",
  "pest_derive",

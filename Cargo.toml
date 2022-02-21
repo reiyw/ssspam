@@ -18,6 +18,7 @@ maud = "0.23.0"
 moka = { version = "0.7.1", features = ["future"] }
 mp3-metadata = "0.3.3"
 mp4ameta = "0.11.0"
+nom = "7.1.0"
 once_cell = "1.9.0"
 pest = "2.1.3"
 pest_derive = "2.1.0"
