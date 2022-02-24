@@ -1,3 +1,5 @@
+// TODO: rename this file
+
 use std::str::FromStr;
 
 use nom::{
@@ -52,12 +54,68 @@ pub enum Command {
     Wait(u32),
 }
 
+impl ToString for Command {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Say(cmd) => {
+                let mut s = cmd.name.clone();
+                if cmd.speed != 100 {
+                    s += &format!(" {}", cmd.speed);
+                }
+                if cmd.pitch != 100 {
+                    s += &format!(" p{}", cmd.pitch);
+                }
+                if cmd.wait != 50 {
+                    s += &format!(" w{:.1}", (cmd.wait as f64) / 1000.0);
+                }
+                if cmd.start != 0 {
+                    s += &format!(" s{:.1}", (cmd.start as f64) / 1000.0);
+                }
+                if let Some(dur) = cmd.duration {
+                    s += &format!(" d{:.1}", (dur as f64) / 1000.0);
+                }
+                if cmd.stop {
+                    s += " s";
+                }
+                match cmd.action {
+                    Action::Synthesize => s += "; ",
+                    Action::Concat => s += "| ",
+                }
+                s
+            }
+            Self::Wait(n) => format!("~w{:.1}; ", (*n as f64) / 1000.0),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Commands(Vec<Command>);
 
 impl Commands {
     pub fn iter(&self) -> std::slice::Iter<'_, Command> {
         self.0.iter()
+    }
+
+    pub fn into_iter(self) -> std::vec::IntoIter<Command> {
+        self.0.into_iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn sanitize(&mut self) {
+        for cmd in self.0.iter_mut() {
+            match cmd {
+                Command::Say(cmd) => {
+                    cmd.speed = std::cmp::max(cmd.speed, 10);
+                    cmd.speed = std::cmp::min(cmd.speed, 999);
+                    cmd.pitch = std::cmp::max(cmd.pitch, 10);
+                    cmd.pitch = std::cmp::min(cmd.pitch, 200);
+                }
+                Command::Wait(_) => (),
+            }
+        }
     }
 }
 
@@ -72,6 +130,14 @@ impl FromStr for Commands {
                 code,
             }),
         }
+    }
+}
+
+impl ToString for Commands {
+    fn to_string(&self) -> String {
+        let mut s: String = self.iter().map(|c| c.to_string()).collect();
+        s.truncate(s.len() - 2);
+        s
     }
 }
 
@@ -440,5 +506,77 @@ mod test {
     fn test_parse_fails_for_usual_text() {
         assert!(Commands::from_str("テスト").is_err());
         assert!(Commands::from_str("This is a test").is_err());
+    }
+
+    #[test]
+    fn test_to_string() {
+        assert_eq!(
+            Commands(vec![Command::Say(
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .build()
+                    .unwrap()
+            )])
+            .to_string(),
+            "a".to_string()
+        );
+        assert_eq!(
+            Commands(vec![
+                Command::Say(
+                    SayCommandBuilder::default()
+                        .name("a".to_string())
+                        .speed(50)
+                        .pitch(10)
+                        .wait(100)
+                        .start(200)
+                        .duration(Some(300))
+                        .stop(true)
+                        .build()
+                        .unwrap()
+                ),
+                Command::Wait(1000),
+                Command::Say(
+                    SayCommandBuilder::default()
+                        .name("b".to_string())
+                        .speed(100)
+                        .pitch(20)
+                        .wait(200)
+                        .start(300)
+                        .duration(Some(400))
+                        .stop(true)
+                        .build()
+                        .unwrap()
+                ),
+            ])
+            .to_string(),
+            "a 50 p10 w0.1 s0.2 d0.3 s; ~w1.0; b p20 w0.2 s0.3 d0.4 s".to_string()
+        );
+        assert_eq!(
+            Commands(vec![
+                Command::Say(
+                    SayCommandBuilder::default()
+                        .name("a".to_string())
+                        .action(Action::Concat)
+                        .build()
+                        .unwrap()
+                ),
+                Command::Say(
+                    SayCommandBuilder::default()
+                        .name("b".to_string())
+                        .action(Action::Concat)
+                        .build()
+                        .unwrap()
+                ),
+                Command::Say(
+                    SayCommandBuilder::default()
+                        .name("c".to_string())
+                        .action(Action::Concat)
+                        .build()
+                        .unwrap()
+                ),
+            ])
+            .to_string(),
+            "a| b| c".to_string()
+        );
     }
 }

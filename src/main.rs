@@ -3,6 +3,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
@@ -44,7 +45,7 @@ use systemstat::{Platform, System};
 
 use ssspambot::{
     load_sounds_try_from_cache,
-    parser::{parse_say_commands, Action, SayCommand},
+    parser2::{Action, Command, Commands, SayCommand},
     play_source, prettify_sounds, search_impl, SoundDetail,
 };
 use tokio::sync::broadcast;
@@ -158,14 +159,18 @@ async fn process_message(ctx: &Context, msg: &Message) {
         return;
     }
 
-    let cmds = parse_say_commands(&msg.content);
-    if cmds.is_err() {
-        return;
-    }
-    let cmds = cmds.unwrap();
-    if cmds.is_empty() {
-        return;
-    }
+    let cmds = {
+        let cmds = Commands::from_str(&msg.content);
+        if cmds.is_err() {
+            return;
+        }
+        let mut cmds = cmds.unwrap();
+        if cmds.is_empty() {
+            return;
+        }
+        cmds.sanitize();
+        cmds
+    };
 
     let manager = songbird::get(ctx)
         .await
@@ -182,13 +187,27 @@ async fn process_message(ctx: &Context, msg: &Message) {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut sources: Vec<Option<Arc<CachedSound>>> = Vec::new();
-        for cmd in &cmds {
-            sources.push(get_or_make_source(cmd, sources_lock.clone()).await);
+        let mut playable_sound_count = 0;
+        for cmd in cmds.iter() {
+            if let Command::Say(saycmd) = cmd {
+                let source = get_or_make_source(saycmd, sources_lock.clone()).await;
+                let playable = source.is_some();
+                sources.push(source);
+
+                if playable {
+                    playable_sound_count += 1;
+                    if playable_sound_count == 10 {
+                        break;
+                    }
+                }
+            } else {
+                sources.push(None);
+            };
         }
 
         for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
-            match source {
-                Some(source) => {
+            match (source, cmd) {
+                (Some(source), Command::Say(cmd)) => {
                     let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
 
                     match cmd.action {
@@ -212,13 +231,10 @@ async fn process_message(ctx: &Context, msg: &Message) {
                         track_handle.stop().ok();
                     }
                 }
-                None => {
-                    // FIXME: too error-prone
-                    if cmd.name.starts_with("~w") {
-                        let wait = cmd.name[2..].parse::<f64>().unwrap() * 1000.0;
-                        tokio::time::sleep(Duration::from_millis(wait as u64)).await;
-                    }
+                (None, Command::Wait(n)) => {
+                    tokio::time::sleep(Duration::from_millis(n as u64)).await;
                 }
+                _ => (),
             }
         }
     }
@@ -597,17 +613,8 @@ async fn r(ctx: &Context, msg: &Message) -> CommandResult {
         if msg.content.len() > 1 {
             cmd += &msg.content[2..];
         }
-        if let Ok(cmds) = parse_say_commands(&cmd) {
-            if let Some(cmd) = cmds.get(0) {
-                let mut result = cmd.name.clone();
-                if cmd.speed != 100 {
-                    result += &format!(" @{}", cmd.speed);
-                }
-                if cmd.pitch != 100 {
-                    result += &format!(" p{}", cmd.pitch);
-                }
-                check_msg(msg.channel_id.say(&ctx.http, result).await);
-            }
+        if let Ok(cmds) = Commands::from_str(&cmd) {
+            check_msg(msg.channel_id.say(&ctx.http, cmds.to_string()).await);
         }
     }
 
