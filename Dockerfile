@@ -2,7 +2,7 @@ FROM lukemathwalker/cargo-chef:latest-rust-1.57.0 AS chef
 WORKDIR /app
 
 FROM chef AS planner
-COPY src .
+COPY src src
 COPY Cargo.toml .
 COPY Cargo.lock .
 RUN cargo chef prepare --recipe-path recipe.json
@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     ;
 RUN cargo chef cook --release --recipe-path recipe.json
 
-COPY src .
+COPY src src
 COPY Cargo.toml .
 RUN cargo build --release
 RUN cargo build --release --bins
