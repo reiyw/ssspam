@@ -96,10 +96,6 @@ impl Commands {
         self.0.iter()
     }
 
-    pub fn into_iter(self) -> std::vec::IntoIter<Command> {
-        self.0.into_iter()
-    }
-
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -116,6 +112,16 @@ impl Commands {
                 Command::Wait(_) => (),
             }
         }
+    }
+}
+
+impl IntoIterator for Commands {
+    type Item = Command;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 
@@ -180,8 +186,8 @@ fn action(i: &str) -> IResult<&str, &str> {
 
 fn say_arg(input: &str) -> IResult<&str, SayArg> {
     alt((
-        map(speed, |n| SayArg::Speed(n)),
-        map(pitch, |n| SayArg::Pitch(n)),
+        map(speed, SayArg::Speed),
+        map(pitch, SayArg::Pitch),
         map(wait, |n| SayArg::Wait((n * 1000.0) as u32)),
         map(start, |n| SayArg::Start((n * 1000.0) as u32)),
         map(duration, |n| SayArg::Duration((n * 1000.0) as u32)),
@@ -204,9 +210,11 @@ fn say_command(input: &str) -> IResult<&str, SayCommand> {
         _ => unreachable!(),
     })(input)?;
 
-    let mut saycmd = SayCommand::default();
-    saycmd.name = name.to_string();
-    saycmd.action = action;
+    let mut saycmd = SayCommand {
+        name: name.to_string(),
+        action,
+        .. Default::default()
+    };
 
     for opt in opts {
         match opt {
@@ -228,7 +236,7 @@ fn wait_command(input: &str) -> IResult<&str, f64> {
 
 fn commands(input: &str) -> IResult<&str, Vec<Command>> {
     many1(alt((
-        map(say_command, |s| Command::Say(s)),
+        map(say_command, Command::Say),
         map(wait_command, |n| Command::Wait((n * 1000.0) as u32)),
     )))(input)
 }
