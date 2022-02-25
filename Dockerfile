@@ -37,11 +37,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=donwload_sound /app/sound /app/sound
+
 COPY --from=builder /app/target/release/preload /usr/local/bin
 RUN /usr/local/bin/preload --sound-dir /app/sound
 
 COPY --from=builder /app/target/release/ssspambot /usr/local/bin
-
-COPY --from=donwload_sound /app/sound /app/sound
 
 CMD ["/usr/local/bin/ssspambot", "--sound-dir", "/app/sound"]
