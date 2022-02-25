@@ -2,7 +2,8 @@ FROM lukemathwalker/cargo-chef:latest-rust-1.57.0 AS chef
 WORKDIR /app
 
 FROM chef AS planner
-COPY . .
+COPY Cargo.toml .
+COPY Cargo.lock .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder 
@@ -14,7 +15,8 @@ RUN apt-get update && apt-get install -y \
     ;
 RUN cargo chef cook --release --recipe-path recipe.json
 
-COPY . .
+COPY src .
+COPY Cargo.toml .
 RUN cargo build --release
 RUN cargo build --release --bins
 
@@ -25,7 +27,8 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     wget \
     unzip \
-    ;
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir sound; \
     cd sound; \
