@@ -1,4 +1,3 @@
-pub mod parser;
 pub mod parser2;
 
 use std::{
@@ -15,8 +14,6 @@ use counter::Counter;
 #[macro_use]
 extern crate derive_builder;
 use glob::glob;
-#[macro_use]
-extern crate pest_derive;
 #[macro_use]
 extern crate prettytable;
 use prettytable::{format, Table};
