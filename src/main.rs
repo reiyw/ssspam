@@ -45,7 +45,7 @@ use systemstat::{Platform, System};
 
 use ssspambot::{
     load_sounds_try_from_cache,
-    parser2::{Action, Command, Commands, SayCommand},
+    parser::{Action, Command, Commands, SayCommand},
     play_source, prettify_sounds, search_impl, SoundDetail,
 };
 use tokio::sync::broadcast;

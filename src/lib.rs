@@ -1,4 +1,4 @@
-pub mod parser2;
+pub mod parser;
 
 use std::{
     collections::BTreeMap,
