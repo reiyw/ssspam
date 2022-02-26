@@ -334,7 +334,7 @@ impl TypeMapKey for BotJoinningChannel {
 }
 
 #[group]
-#[commands(join, leave, mute, unmute, s, st, r, stop, uptime, cpu)]
+#[commands(join, leave, mute, unmute, s, st, r, stop, uptime, cpu, parse)]
 struct General;
 
 #[derive(Debug, StructOpt)]
@@ -687,5 +687,16 @@ async fn cpu(ctx: &Context, msg: &Message) -> CommandResult {
             )
             .await,
     );
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+async fn parse(ctx: &Context, msg: &Message) -> CommandResult {
+    match Commands::from_str(&msg.content[6..]) {
+        Ok(cmds) => check_msg(msg.reply(ctx, cmds.to_string()).await),
+        Err(e) => check_msg(msg.reply(ctx, e.to_string()).await),
+    }
+
     Ok(())
 }
