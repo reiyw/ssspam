@@ -213,7 +213,7 @@ fn say_command(input: &str) -> IResult<&str, SayCommand> {
     let mut saycmd = SayCommand {
         name: name.to_string(),
         action,
-        .. Default::default()
+        ..Default::default()
     };
 
     for opt in opts {
