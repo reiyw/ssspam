@@ -35,7 +35,7 @@ pub struct SoundDetail {
 }
 
 impl SoundDetail {
-    fn new(
+    const fn new(
         name: String,
         path: PathBuf,
         sample_rate_hz: u32,
@@ -80,7 +80,7 @@ impl SoundDetail {
 
         let updated_at = fs::metadata(path)?.modified()?;
 
-        Ok(SoundDetail::new(
+        Ok(Self::new(
             ss_name,
             path.to_path_buf(),
             sample_rate_hz,
@@ -114,7 +114,7 @@ impl SoundDetail {
 
         let updated_at = fs::metadata(path)?.modified()?;
 
-        Ok(SoundDetail::new(
+        Ok(Self::new(
             ss_name,
             path.to_path_buf(),
             sample_rate_hz,
