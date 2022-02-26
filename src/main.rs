@@ -217,14 +217,15 @@ async fn process_message(ctx: &Context, msg: &Message) {
                         Action::Concat => {
                             let details = SOUND_DETAILS.read().await;
                             let detail = details.get(&cmd.name.to_lowercase()).unwrap();
-                            let duration =
-                                (detail.duration.as_millis() as f64) * (100.0 / cmd.speed as f64);
-                            let duration = duration as i64;
-                            let mut wait = duration - cmd.start as i64;
-                            if let Some(dur) = cmd.duration {
-                                wait = cmp::min(wait, dur as i64)
+                            let mut dur = cmp::max(
+                                (detail.duration.as_millis() as i64) - cmd.start as i64,
+                                0,
+                            );
+                            if let Some(n) = cmd.duration {
+                                dur = cmp::min(dur, n as i64)
                             }
-                            tokio::time::sleep(Duration::from_millis(wait as u64)).await;
+                            let dur = ((dur as f64) * (100.0 / cmd.speed as f64)) as u64;
+                            tokio::time::sleep(Duration::from_millis(dur)).await;
                         }
                     }
                     if cmd.stop {
