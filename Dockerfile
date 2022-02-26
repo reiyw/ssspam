@@ -26,8 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip=6.0-26 \
     ;
 RUN mkdir sound; \
-    wget -q https://storage.googleapis.com/surfpvparena/2022-02-12.zip; \
-    unzip 2022-02-12.zip -d sound
+    wget -q https://storage.googleapis.com/surfpvparena/2022-02-26.zip; \
+    unzip 2022-02-26.zip -d sound
 
 FROM debian:bullseye-slim AS runtime
 WORKDIR /app
