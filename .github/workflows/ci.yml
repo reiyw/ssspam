@@ -31,7 +31,7 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: -D clippy::all -W clippy::nursery
+          args: -- -D clippy::all -W clippy::nursery
       - run: cargo fmt -- --check
       - uses: hadolint/hadolint-action@v1.6.0
         name: Lint Dockerfile
