@@ -8,6 +8,9 @@ on:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -40,4 +43,5 @@ jobs:
           password: ${{ steps.auth.outputs.access_token }}
       - run: |-
           echo '${{ steps.auth.outputs.access_token }}' | docker login -u oauth2accesstoken --password-stdin https://asia.gcr.io
+          docker tag reiyw/ssspam:latest asia.gcr.io/ssspam/bot:latest
           docker push asia.gcr.io/ssspam/bot:latest
