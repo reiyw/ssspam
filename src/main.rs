@@ -10,7 +10,7 @@ use std::{
 
 use dotenv::dotenv;
 use moka::future::Cache;
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
 use serenity::{
     async_trait,
@@ -25,7 +25,7 @@ use serenity::{
     model::{
         channel::Message,
         gateway::Ready,
-        id::{ChannelId, GuildId},
+        id::{ChannelId, GuildId, UserId},
         misc::Mentionable,
         prelude::VoiceState,
     },
@@ -44,7 +44,7 @@ use structopt::StructOpt;
 use systemstat::{Platform, System};
 
 use ssspambot::{
-    load_sounds_try_from_cache,
+    load_sounds, load_sounds_try_from_cache,
     parser::{Action, Command, Commands, SayCommand},
     play_source, prettify_sounds, search_impl, SoundDetail,
 };
@@ -58,6 +58,13 @@ static MESSAGE_BROADCAST_CONNECT: Lazy<RwLock<broadcast::Sender<bool>>> =
     Lazy::new(|| RwLock::new(broadcast::channel(16).0));
 static MESSAGE_BROADCAST_RECEIVER: Lazy<Mutex<broadcast::Receiver<bool>>> =
     Lazy::new(|| Mutex::new(broadcast::channel(16).1));
+
+static SOUND_DIR: OnceCell<PathBuf> = OnceCell::new();
+
+static ADMIN_USER_IDS: &[UserId] = &[
+    UserId(310620137608970240), // auzen
+    UserId(342903795380125698), // nicotti
+];
 
 async fn get_or_make_source(
     cmd: &SayCommand,
@@ -335,7 +342,7 @@ impl TypeMapKey for BotJoinningChannel {
 }
 
 #[group]
-#[commands(join, leave, mute, unmute, s, st, r, stop, uptime, cpu, parse)]
+#[commands(join, leave, mute, unmute, s, st, r, stop, uptime, cpu, parse, reload)]
 struct General;
 
 #[derive(Debug, StructOpt)]
@@ -355,6 +362,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
     let opt = Opt::from_args();
+
+    SOUND_DIR.set(opt.sound_dir.clone()).ok();
 
     {
         let mut sound_details = SOUND_DETAILS.write().await;
@@ -700,4 +709,35 @@ async fn parse(ctx: &Context, msg: &Message) -> CommandResult {
     }
 
     Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+async fn reload(ctx: &Context, msg: &Message) -> CommandResult {
+    if !ADMIN_USER_IDS.contains(&msg.author.id) {
+        check_msg(
+            msg.reply(ctx, "You are not authorized to run `~reload`")
+                .await,
+        );
+        return Ok(());
+    }
+
+    let (old, new) = reload_impl().await;
+    check_msg(
+        msg.reply(ctx, format!("Updated sounds: {} -> {}", old, new))
+            .await,
+    );
+    Ok(())
+}
+
+async fn reload_impl() -> (usize, usize) {
+    let new_sound_details = load_sounds(SOUND_DIR.get().unwrap());
+    let mut sound_details = SOUND_DETAILS.write().await;
+
+    let old_sounds_len = sound_details.len();
+    let new_sounds_len = new_sound_details.len();
+
+    *sound_details = new_sound_details;
+
+    (old_sounds_len, new_sounds_len)
 }
