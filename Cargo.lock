@@ -2425,6 +2425,7 @@ dependencies = [
  "openssl-probe",
  "prettytable-rs",
  "rand 0.8.5",
+ "reqwest",
  "serde",
  "serde_json",
  "serenity",

@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::bail;
+// use anyhow::bail;
 use async_zip::read::mem::ZipFileReader;
 use dotenv::dotenv;
 use moka::future::Cache;
@@ -776,21 +776,34 @@ async fn upload(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
+async fn upload_impl(_ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
     let sound_dir = SOUND_DIR.get().unwrap();
     let mut mp3_count = 0;
 
     let client = cloud_storage::Client::default();
 
+    let reqwest_client = reqwest::ClientBuilder::new()
+        .danger_accept_invalid_certs(true)
+        .build()?;
+
     for attachment in &msg.attachments {
-        let content = match attachment.download().await {
-            Ok(content) => content,
-            Err(why) => {
-                let _ = msg.reply(&ctx, "Error downloading attachment").await;
-                println!("Error downloading attachment: {:?}", why);
-                bail!("Error downloading attachment: {:?}", why);
-            }
+        let content = {
+            let bytes = reqwest_client
+                .get(&attachment.url)
+                .send()
+                .await?
+                .bytes()
+                .await?;
+            bytes.to_vec()
         };
+        // let content = match attachment.download().await {
+        //     Ok(content) => content,
+        //     Err(why) => {
+        //         let _ = msg.reply(&ctx, "Error downloading attachment").await;
+        //         println!("Error downloading attachment: {:?}", why);
+        //         bail!("Error downloading attachment: {:?}", why);
+        //     }
+        // };
 
         if attachment.filename.ends_with(".zip") {
             let mut zip = ZipFileReader::new(&content[..]).await?;
