@@ -8,6 +8,8 @@ use std::{
     time::Duration,
 };
 
+use anyhow::bail;
+use async_zip::read::mem::ZipFileReader;
 use dotenv::dotenv;
 use moka::future::Cache;
 use once_cell::sync::{Lazy, OnceCell};
@@ -48,7 +50,11 @@ use ssspambot::{
     parser::{Action, Command, Commands, SayCommand},
     play_source, prettify_sounds, search_impl, SoundDetail,
 };
-use tokio::sync::broadcast;
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::broadcast,
+};
 
 static SOUND_DETAILS: Lazy<RwLock<BTreeMap<String, SoundDetail>>> =
     Lazy::new(|| RwLock::new(BTreeMap::new()));
@@ -342,7 +348,9 @@ impl TypeMapKey for BotJoinningChannel {
 }
 
 #[group]
-#[commands(join, leave, mute, unmute, s, st, r, stop, uptime, cpu, parse, reload)]
+#[commands(
+    join, leave, mute, unmute, s, st, r, stop, uptime, cpu, parse, reload, upload
+)]
 struct General;
 
 #[derive(Debug, StructOpt)]
@@ -740,4 +748,98 @@ async fn reload_impl() -> (usize, usize) {
     *sound_details = new_sound_details;
 
     (old_sounds_len, new_sounds_len)
+}
+
+#[command]
+#[only_in(guilds)]
+async fn upload(ctx: &Context, msg: &Message) -> CommandResult {
+    if !ADMIN_USER_IDS.contains(&msg.author.id) {
+        check_msg(
+            msg.reply(ctx, "You are not authorized to run `~upload`")
+                .await,
+        );
+        return Ok(());
+    }
+
+    if let Ok(count) = upload_impl(ctx, msg).await {
+        if count > 0 {
+            reload_impl().await;
+            check_msg(
+                msg.reply(ctx, format!("Successfully uploaded {} sounds", count))
+                    .await,
+            );
+        }
+    }
+
+    Ok(())
+}
+
+async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
+    let sound_dir = SOUND_DIR.get().unwrap();
+    let mut mp3_count = 0;
+
+    let client = cloud_storage::Client::default();
+
+    for attachment in &msg.attachments {
+        let content = match attachment.download().await {
+            Ok(content) => content,
+            Err(why) => {
+                let _ = msg.reply(&ctx, "Error downloading attachment").await;
+                bail!("Error downloading attachment: {:?}", why);
+            }
+        };
+
+        if attachment.filename.ends_with(".zip") {
+            let mut zip = ZipFileReader::new(&content[..]).await?;
+            for i in 0..zip.entries().len() {
+                let reader = zip.entry_reader(i).await?;
+                let entry = reader.entry();
+
+                if entry.dir() || !entry.name().ends_with(".mp3") {
+                    continue;
+                }
+
+                let out_path = sound_dir.join(PathBuf::from(entry.name()).file_name().unwrap());
+                let mut output = File::create(&out_path).await?;
+                reader.copy_to_end_crc(&mut output, 65536).await?;
+                mp3_count += 1;
+
+                let mut file = File::open(&out_path).await?;
+                let mut content = vec![];
+                file.read_to_end(&mut content).await?;
+                client
+                    .object()
+                    .create(
+                        "surfpvparena",
+                        content,
+                        &format!(
+                            "dist/sound/{}",
+                            out_path.file_name().unwrap().to_str().unwrap()
+                        ),
+                        "audio/mpeg",
+                    )
+                    .await?;
+            }
+        } else if attachment.filename.ends_with(".mp3") {
+            let out_path = sound_dir.join(&attachment.filename);
+            let mut file = File::create(&out_path).await?;
+            file.write_all(&content).await?;
+            mp3_count += 1;
+
+            client
+                .object()
+                .create(
+                    "surfpvparena",
+                    content,
+                    &format!(
+                        "dist/sound/{}",
+                        out_path.file_name().unwrap().to_str().unwrap()
+                    ),
+                    "audio/mpeg",
+                )
+                .await?;
+        }
+    }
+
+    Ok(mp3_count)
 }

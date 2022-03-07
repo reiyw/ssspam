@@ -2,3 +2,4 @@
 secret.yaml
 /target
 /dist
+credentials.json
