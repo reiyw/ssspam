@@ -785,6 +785,7 @@ async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
             Ok(content) => content,
             Err(why) => {
                 let _ = msg.reply(&ctx, "Error downloading attachment").await;
+                println!("Error downloading attachment: {:?}", why);
                 bail!("Error downloading attachment: {:?}", why);
             }
         };
