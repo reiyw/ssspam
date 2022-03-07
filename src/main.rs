@@ -365,6 +365,8 @@ struct Opt {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    openssl_probe::init_ssl_cert_env_vars();
+
     tracing_subscriber::fmt::init();
 
     dotenv().ok();
