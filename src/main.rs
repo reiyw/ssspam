@@ -763,13 +763,22 @@ async fn upload(ctx: &Context, msg: &Message) -> CommandResult {
         return Ok(());
     }
 
-    if let Ok(count) = upload_impl(ctx, msg).await {
-        if count > 0 {
-            reload_impl().await;
+    match upload_impl(ctx, msg).await {
+        Ok(count) => {
+            if count > 0 {
+                reload_impl().await;
+                check_msg(
+                    msg.reply(ctx, format!("Successfully uploaded {} sounds", count))
+                        .await,
+                );
+            }
+        }
+        Err(e) => {
             check_msg(
-                msg.reply(ctx, format!("Successfully uploaded {} sounds", count))
+                msg.reply(ctx, "Could not upload the sound files for some reason")
                     .await,
             );
+            println!("{:?}", e)
         }
     }
 
