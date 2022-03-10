@@ -34,8 +34,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libopus-dev=1.3.1-0.1 \
     ffmpeg=7:4.3.3-0+deb11u1 \
+    ca-certificates=20210119 \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-ca-certificates
 
 COPY --from=donwload_sound /app/sound /app/sound
 
