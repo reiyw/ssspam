@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-// use anyhow::bail;
+use anyhow::{Context as _};
 use async_zip::read::mem::ZipFileReader;
 use dotenv::dotenv;
 use moka::future::Cache;
@@ -786,7 +786,7 @@ async fn upload(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 async fn upload_impl(_ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
-    let sound_dir = SOUND_DIR.get().unwrap();
+    let sound_dir = SOUND_DIR.get().with_context(|| "Failed to get sound_dir")?;
     let mut mp3_count = 0;
 
     let client = cloud_storage::Client::default();
