@@ -791,29 +791,8 @@ async fn upload_impl(_ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
 
     let client = cloud_storage::Client::default();
 
-    let reqwest_client = reqwest::ClientBuilder::new()
-        .danger_accept_invalid_certs(true)
-        .build()?;
-
     for attachment in &msg.attachments {
         let content = attachment.download().await?;
-        // let content = {
-        //     let bytes = reqwest_client
-        //         .get(&attachment.url.replace("https", "http"))
-        //         .send()
-        //         .await?
-        //         .bytes()
-        //         .await?;
-        //     bytes.to_vec()
-        // };
-        // let content = match attachment.download().await {
-        //     Ok(content) => content,
-        //     Err(why) => {
-        //         let _ = msg.reply(&ctx, "Error downloading attachment").await;
-        //         println!("Error downloading attachment: {:?}", why);
-        //         bail!("Error downloading attachment: {:?}", why);
-        //     }
-        // };
 
         if attachment.filename.ends_with(".zip") {
             let mut zip = ZipFileReader::new(&content[..]).await?;
