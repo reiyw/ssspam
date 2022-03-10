@@ -798,7 +798,7 @@ async fn upload_impl(_ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
     for attachment in &msg.attachments {
         let content = {
             let bytes = reqwest_client
-                .get(&attachment.url)
+                .get(&attachment.url.replace("https", "http"))
                 .send()
                 .await?
                 .bytes()
