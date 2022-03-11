@@ -429,7 +429,7 @@ impl TypeMapKey for BotJoinningChannel {
 
 #[group]
 #[commands(
-    join, leave, mute, unmute, s, st, r, stop, uptime, cpu, parse, reload, upload
+    join, leave, mute, unmute, s, st, r, stop, uptime, cpu, parse, reload, upload, delete
 )]
 struct General;
 
@@ -927,4 +927,46 @@ async fn upload_impl(_ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
     }
 
     Ok(mp3_count)
+}
+
+#[command]
+#[only_in(guilds)]
+async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
+    if !ADMIN_USER_IDS.contains(&msg.author.id) {
+        check_msg(
+            msg.reply(ctx, "You are not authorized to run `~delete`")
+                .await,
+        );
+        return Ok(());
+    }
+
+    // let mut iter = msg.content.split_whitespace();
+    if let Some(name) = msg.content.split_whitespace().nth(1) {
+        let mut sound_details = SOUND_DETAILS.write().await;
+        if sound_details.remove(name).is_some() {
+            let client = cloud_storage::Client::default();
+            if client
+                .object()
+                .delete("surfpvparena", &format!("dist/sound/{}", name))
+                .await
+                .is_ok()
+            {
+                check_msg(
+                    msg.reply(ctx, format!("Successfully deleted {}", name))
+                        .await,
+                );
+            } else {
+                check_msg(
+                    msg.reply(ctx, format!("Could not delete {} for some reason", name))
+                        .await,
+                );
+            }
+        } else {
+            check_msg(msg.reply(ctx, format!("Could not find {}", name)).await);
+        }
+    } else {
+        check_msg(msg.reply(ctx, "Usage: `~delete <sound_name>`").await);
+    }
+
+    Ok(())
 }
