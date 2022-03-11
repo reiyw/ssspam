@@ -73,7 +73,7 @@ static ADMIN_USER_IDS: &[UserId] = &[
     UserId(342903795380125698), // nicotti
 ];
 
-static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(60);
+static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(3);
 
 struct PlayInfo<'a> {
     cmd: &'a Command,
@@ -154,35 +154,29 @@ async fn get_or_make_source(
 async fn send_tracks(
     play_infos: Vec<PlayInfo<'_>>,
     handler_lock: Arc<Mutex<Call>>,
-    track_handles: Arc<Mutex<Vec<TrackHandle>>>,
-    estimated_duration: Arc<Mutex<Duration>>,
-    elapsed: Arc<Mutex<Duration>>,
+    track_handles: &mut Vec<TrackHandle>,
+    estimated_duration: &mut Duration,
+    elapsed: &mut Duration,
 ) {
-    // let mut elapsed = Duration::from_secs(0);
-    // let mut estimated_duration = Duration::from_secs(0);
-    // let mut track_handles = Vec::new();
-
     for play_info in play_infos {
-        let mut elapsed_lock = elapsed.lock().await;
         match play_info {
             PlayInfo {
                 cmd: Command::Say(cmd),
                 source: Some(source),
                 duration: dur,
             } => {
-                let mut estimated_duration_lock = estimated_duration.lock().await;
-                *estimated_duration_lock = cmp::max(*estimated_duration_lock, *elapsed_lock + dur);
+                *estimated_duration = cmp::max(*estimated_duration, *elapsed + dur);
 
                 let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
 
                 match cmd.action {
                     Action::Synthesize => {
                         let sleep_dur = Duration::from_millis(cmd.wait as u64);
-                        *elapsed_lock += sleep_dur;
+                        *elapsed += sleep_dur;
                         tokio::time::sleep(sleep_dur).await;
                     }
                     Action::Concat => {
-                        *elapsed_lock += dur;
+                        *elapsed += dur;
                         tokio::time::sleep(dur).await;
                     }
                 }
@@ -191,15 +185,14 @@ async fn send_tracks(
                     track_handle.stop().ok();
                 }
 
-                let mut track_handles_lock = track_handles.lock().await;
-                (*track_handles_lock).push(track_handle);
+                (*track_handles).push(track_handle);
             }
             PlayInfo {
                 cmd: Command::Wait(_),
                 duration: dur,
                 ..
             } => {
-                *elapsed_lock += dur;
+                *elapsed += dur;
                 tokio::time::sleep(dur).await;
             }
             _ => (),
@@ -301,33 +294,32 @@ async fn process_message(ctx: &Context, msg: &Message) {
             play_infos.push(info);
         }
 
-        let track_handles = Arc::new(Mutex::new(Vec::new()));
-        let estimated_duration = Arc::new(Mutex::new(Duration::from_secs(0)));
-        let elapsed = Arc::new(Mutex::new(Duration::from_secs(0)));
-        let task = send_tracks(
-            play_infos,
-            handler_lock,
-            track_handles.clone(),
-            estimated_duration.clone(),
-            elapsed.clone(),
-        );
-        tokio::pin!(task);
-        match tokio::time::timeout(MAX_PLAYABLE_DURATION, &mut task).await {
+        let mut track_handles = Vec::new();
+        let mut estimated_duration = Duration::from_secs(0);
+        let mut elapsed = Duration::from_secs(0);
+        let timeout_result = {
+            let task = send_tracks(
+                play_infos,
+                handler_lock,
+                &mut track_handles,
+                &mut estimated_duration,
+                &mut elapsed,
+            );
+            tokio::pin!(task);
+            tokio::time::timeout(MAX_PLAYABLE_DURATION, &mut task).await
+        };
+        match timeout_result {
             Ok(_) => {
-                let estimated_duration_lock = estimated_duration.lock().await;
-                if *estimated_duration_lock > MAX_PLAYABLE_DURATION {
-                    let elapsed_lock = elapsed.lock().await;
-                    let sleep_dur = MAX_PLAYABLE_DURATION - *elapsed_lock;
+                if estimated_duration > MAX_PLAYABLE_DURATION {
+                    let sleep_dur = MAX_PLAYABLE_DURATION - elapsed;
                     tokio::time::sleep(sleep_dur).await;
-                    let track_handles_lock = track_handles.lock().await;
-                    for track_handle in track_handles_lock.iter() {
+                    for track_handle in track_handles.iter() {
                         track_handle.stop().ok();
                     }
                 }
             }
             Err(_) => {
-                let track_handles_lock = track_handles.lock().await;
-                for track_handle in track_handles_lock.iter() {
+                for track_handle in track_handles.iter() {
                     track_handle.stop().ok();
                 }
             }
