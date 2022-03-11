@@ -12,9 +12,15 @@ jobs:
   cargo-test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-2019, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Install OpenSSL on Windows
+        if: startsWith(matrix.os, 'windows')
+        run: |
+          vcpkg install openssl:x64-windows-static-md
+          vcpkg integrate install
+        shell: cmd
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
