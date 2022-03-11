@@ -947,7 +947,7 @@ async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
             let client = cloud_storage::Client::default();
             if client
                 .object()
-                .delete("surfpvparena", &format!("dist/sound/{}", name))
+                .delete("surfpvparena", &format!("dist/sound/{}.mp3", name))
                 .await
                 .is_ok()
             {
