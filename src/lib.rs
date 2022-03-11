@@ -220,6 +220,7 @@ pub fn prettify_sounds(sounds: impl Iterator<Item = SoundDetail>) -> String {
 
 /// Calculates the duration of the sound if the say command was played.
 pub fn calc_sound_duration(cmd: &SayCommand, original_duration: &Duration) -> Duration {
+    // TODO: need to deal with combinations of w and s, e.g., w1s
     let mut dur = cmp::max((original_duration.as_millis() as i64) - cmd.start as i64, 0);
     if let Some(n) = cmd.duration {
         dur = cmp::min(dur, n as i64)
