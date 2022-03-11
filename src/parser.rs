@@ -104,9 +104,7 @@ impl Commands {
         for cmd in self.0.iter_mut() {
             match cmd {
                 Command::Say(cmd) => {
-                    cmd.speed = std::cmp::max(cmd.speed, 10);
-                    cmd.speed = std::cmp::min(cmd.speed, 999);
-                    cmd.pitch = std::cmp::max(cmd.pitch, 10);
+                    cmd.pitch = std::cmp::max(cmd.pitch, 1);
                     cmd.pitch = std::cmp::min(cmd.pitch, 200);
                 }
                 Command::Wait(_) => (),
