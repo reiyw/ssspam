@@ -1,6 +1,7 @@
 pub mod parser;
 
 use std::{
+    cmp,
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
@@ -16,6 +17,7 @@ extern crate derive_builder;
 use glob::glob;
 #[macro_use]
 extern crate prettytable;
+use parser::SayCommand;
 use prettytable::{format, Table};
 use serde::{Deserialize, Serialize};
 use songbird::{create_player, input::Input, tracks::TrackHandle, Call};
@@ -214,4 +216,14 @@ pub fn prettify_sounds(sounds: impl Iterator<Item = SoundDetail>) -> String {
     }
 
     table.to_string()
+}
+
+/// Calculates the duration of the sound if the say command was played.
+pub fn calc_sound_duration(cmd: &SayCommand, original_duration: &Duration) -> Duration {
+    let mut dur = cmp::max((original_duration.as_millis() as i64) - cmd.start as i64, 0);
+    if let Some(n) = cmd.duration {
+        dur = cmp::min(dur, n as i64)
+    }
+    let dur = ((dur as f64) * (100.0 / cmd.speed as f64)) as u64;
+    Duration::from_millis(dur)
 }
