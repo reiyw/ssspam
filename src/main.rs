@@ -40,13 +40,14 @@ use songbird::{
         cached::{Compressed, Memory},
         Input,
     },
-    SerenityInit,
+    tracks::TrackHandle,
+    Call, SerenityInit,
 };
 use structopt::StructOpt;
 use systemstat::{Platform, System};
 
 use ssspambot::{
-    load_sounds, load_sounds_try_from_cache,
+    calc_sound_duration, load_sounds, load_sounds_try_from_cache,
     parser::{Action, Command, Commands, SayCommand},
     play_source, prettify_sounds, search_impl, SoundDetail,
 };
@@ -71,6 +72,14 @@ static ADMIN_USER_IDS: &[UserId] = &[
     UserId(310620137608970240), // auzen
     UserId(342903795380125698), // nicotti
 ];
+
+static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(60);
+
+struct PlayInfo<'a> {
+    cmd: &'a Command,
+    source: Option<Arc<CachedSound>>,
+    duration: Duration,
+}
 
 async fn get_or_make_source(
     cmd: &SayCommand,
@@ -142,6 +151,62 @@ async fn get_or_make_source(
     sources.get(&cmd)
 }
 
+async fn send_tracks(
+    play_infos: Vec<PlayInfo<'_>>,
+    handler_lock: Arc<Mutex<Call>>,
+    track_handles: Arc<Mutex<Vec<TrackHandle>>>,
+    estimated_duration: Arc<Mutex<Duration>>,
+    elapsed: Arc<Mutex<Duration>>,
+) {
+    // let mut elapsed = Duration::from_secs(0);
+    // let mut estimated_duration = Duration::from_secs(0);
+    // let mut track_handles = Vec::new();
+
+    for play_info in play_infos {
+        let mut elapsed_lock = elapsed.lock().await;
+        match play_info {
+            PlayInfo {
+                cmd: Command::Say(cmd),
+                source: Some(source),
+                duration: dur,
+            } => {
+                let mut estimated_duration_lock = estimated_duration.lock().await;
+                *estimated_duration_lock = cmp::max(*estimated_duration_lock, *elapsed_lock + dur);
+
+                let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
+
+                match cmd.action {
+                    Action::Synthesize => {
+                        let sleep_dur = Duration::from_millis(cmd.wait as u64);
+                        *elapsed_lock += sleep_dur;
+                        tokio::time::sleep(sleep_dur).await;
+                    }
+                    Action::Concat => {
+                        *elapsed_lock += dur;
+                        tokio::time::sleep(dur).await;
+                    }
+                }
+
+                if cmd.stop {
+                    track_handle.stop().ok();
+                }
+
+                let mut track_handles_lock = track_handles.lock().await;
+                (*track_handles_lock).push(track_handle);
+            }
+            PlayInfo {
+                cmd: Command::Wait(_),
+                duration: dur,
+                ..
+            } => {
+                *elapsed_lock += dur;
+                tokio::time::sleep(dur).await;
+            }
+            _ => (),
+        }
+    }
+}
+
 async fn process_message(ctx: &Context, msg: &Message) {
     // Allow saysound-spam channel at css server or general channel at my server.
     if !(msg.channel_id == 921678977662332928 || msg.channel_id == 391743739430699010) {
@@ -199,56 +264,72 @@ async fn process_message(ctx: &Context, msg: &Message) {
         .expect("Sound cache was installed at startup.");
 
     if let Some(handler_lock) = manager.get(guild_id) {
-        let mut sources: Vec<Option<Arc<CachedSound>>> = Vec::new();
+        let mut play_infos: Vec<PlayInfo> = Vec::new();
         let mut playable_sound_count = 0;
         for cmd in cmds.iter() {
-            if let Command::Say(saycmd) = cmd {
-                let source = get_or_make_source(saycmd, sources_lock.clone()).await;
-                let playable = source.is_some();
-                sources.push(source);
+            let info = match cmd {
+                Command::Say(saycmd) => {
+                    match get_or_make_source(saycmd, sources_lock.clone()).await {
+                        Some(source) => {
+                            playable_sound_count += 1;
+                            if playable_sound_count > 10 {
+                                break;
+                            }
 
-                if playable {
-                    playable_sound_count += 1;
-                    if playable_sound_count == 10 {
-                        break;
+                            let details = SOUND_DETAILS.read().await;
+                            let detail = details.get(&saycmd.name.to_lowercase()).unwrap();
+
+                            PlayInfo {
+                                cmd,
+                                source: Some(source),
+                                duration: calc_sound_duration(saycmd, &detail.duration),
+                            }
+                        }
+                        None => PlayInfo {
+                            cmd,
+                            source: None,
+                            duration: Duration::from_secs(0),
+                        },
                     }
                 }
-            } else {
-                sources.push(None);
+                Command::Wait(n) => PlayInfo {
+                    cmd,
+                    source: None,
+                    duration: Duration::from_millis(*n as u64),
+                },
             };
+            play_infos.push(info);
         }
 
-        for (source, cmd) in sources.into_iter().zip(cmds.into_iter()) {
-            match (source, cmd) {
-                (Some(source), Command::Say(cmd)) => {
-                    let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
-
-                    match cmd.action {
-                        Action::Synthesize => {
-                            tokio::time::sleep(Duration::from_millis(cmd.wait as u64)).await;
-                        }
-                        Action::Concat => {
-                            let details = SOUND_DETAILS.read().await;
-                            let detail = details.get(&cmd.name.to_lowercase()).unwrap();
-                            let mut dur = cmp::max(
-                                (detail.duration.as_millis() as i64) - cmd.start as i64,
-                                0,
-                            );
-                            if let Some(n) = cmd.duration {
-                                dur = cmp::min(dur, n as i64)
-                            }
-                            let dur = ((dur as f64) * (100.0 / cmd.speed as f64)) as u64;
-                            tokio::time::sleep(Duration::from_millis(dur)).await;
-                        }
-                    }
-                    if cmd.stop {
+        let track_handles = Arc::new(Mutex::new(Vec::new()));
+        let estimated_duration = Arc::new(Mutex::new(Duration::from_secs(0)));
+        let elapsed = Arc::new(Mutex::new(Duration::from_secs(0)));
+        let task = send_tracks(
+            play_infos,
+            handler_lock,
+            track_handles.clone(),
+            estimated_duration.clone(),
+            elapsed.clone(),
+        );
+        tokio::pin!(task);
+        match tokio::time::timeout(MAX_PLAYABLE_DURATION, &mut task).await {
+            Ok(_) => {
+                let estimated_duration_lock = estimated_duration.lock().await;
+                if *estimated_duration_lock > MAX_PLAYABLE_DURATION {
+                    let elapsed_lock = elapsed.lock().await;
+                    let sleep_dur = MAX_PLAYABLE_DURATION - *elapsed_lock;
+                    tokio::time::sleep(sleep_dur).await;
+                    let track_handles_lock = track_handles.lock().await;
+                    for track_handle in track_handles_lock.iter() {
                         track_handle.stop().ok();
                     }
                 }
-                (None, Command::Wait(n)) => {
-                    tokio::time::sleep(Duration::from_millis(n as u64)).await;
+            }
+            Err(_) => {
+                let track_handles_lock = track_handles.lock().await;
+                for track_handle in track_handles_lock.iter() {
+                    track_handle.stop().ok();
                 }
-                _ => (),
             }
         }
     }
@@ -269,7 +350,6 @@ impl EventHandler for Handler {
         tokio::select! {
             _ = process_message(&ctx, &msg) => (),
             _ = rx.recv() => (),
-            _ = async {tokio::time::sleep(Duration::from_secs(60)).await;} => stop_impl(&ctx, &msg).await,
         }
     }
 
