@@ -18,7 +18,7 @@ jobs:
       - name: Install OpenSSL on Windows
         if: startsWith(matrix.os, 'windows')
         run: |
-          vcpkg install openssl:x64-windows
+          vcpkg install openssl:x64-windows-static-md
           vcpkg integrate install
         shell: cmd
       - uses: actions/checkout@v2
