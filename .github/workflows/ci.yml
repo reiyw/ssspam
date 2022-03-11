@@ -19,7 +19,7 @@ jobs:
         if: startsWith(matrix.os, 'windows')
         run: |
           vcpkg install openssl:x64-windows
-          set VCPKG_ROOT=c:\vcpkg\installed\x64-windows
+          vcpkg integrate install
         shell: cmd
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
