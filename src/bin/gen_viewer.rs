@@ -110,10 +110,7 @@ struct Data {
 }
 
 fn gen_data(sound_dir: impl AsRef<Path>, out_file: impl AsRef<Path>) -> anyhow::Result<()> {
-    let sounds: Vec<SoundDetail> = load_sounds(sound_dir)
-        .values()
-        .cloned()
-        .collect();
+    let sounds: Vec<SoundDetail> = load_sounds(sound_dir).values().cloned().collect();
     let mut data: Vec<(String, String, String, String)> = Vec::new();
     // for sound in sounds[..100].iter().cloned() {
     for sound in sounds {
