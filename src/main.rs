@@ -73,7 +73,7 @@ static ADMIN_USER_IDS: &[UserId] = &[
     UserId(342903795380125698), // nicotti
 ];
 
-static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(3);
+static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(60);
 
 struct PlayInfo<'a> {
     cmd: &'a Command,
