@@ -8,7 +8,7 @@ use maud::{html, PreEscaped, DOCTYPE};
 use serde::Serialize;
 use structopt::StructOpt;
 
-use ssspambot::{load_sounds_try_from_cache, SoundDetail};
+use ssspambot::{load_sounds, SoundDetail};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "gen_viewer")]
@@ -110,7 +110,7 @@ struct Data {
 }
 
 fn gen_data(sound_dir: impl AsRef<Path>, out_file: impl AsRef<Path>) -> anyhow::Result<()> {
-    let sounds: Vec<SoundDetail> = load_sounds_try_from_cache(sound_dir)
+    let sounds: Vec<SoundDetail> = load_sounds(sound_dir)
         .values()
         .cloned()
         .collect();

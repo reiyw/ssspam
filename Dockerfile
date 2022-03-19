@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget=1.21-1+deb11u1 \
     unzip=6.0-26 \
     ;
-ARG SOUNDS_FILE=2022-03-12.zip
+ARG SOUNDS_FILE=2022-03-20.zip
 RUN mkdir sound; \
     wget -q https://storage.googleapis.com/surfpvparena/${SOUNDS_FILE}; \
     unzip ${SOUNDS_FILE} -d sound
