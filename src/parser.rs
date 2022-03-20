@@ -39,7 +39,7 @@ impl Default for SayCommand {
             name: "".into(),
             speed: 100,
             pitch: 100,
-            wait: 50,
+            wait: 100,
             start: 0,
             duration: None,
             stop: false,
@@ -65,7 +65,7 @@ impl ToString for Command {
                 if cmd.pitch != 100 {
                     s += &format!(" p{}", cmd.pitch);
                 }
-                if cmd.wait != 50 {
+                if cmd.wait != 100 {
                     s += &format!(" w{:.1}", (cmd.wait as f64) / 1000.0);
                 }
                 if cmd.start != 0 {
@@ -534,9 +534,9 @@ mod test {
                         .name("a".to_string())
                         .speed(50)
                         .pitch(10)
-                        .wait(100)
-                        .start(200)
-                        .duration(Some(300))
+                        .wait(200)
+                        .start(300)
+                        .duration(Some(400))
                         .stop(true)
                         .build()
                         .unwrap()
@@ -547,16 +547,16 @@ mod test {
                         .name("b".to_string())
                         .speed(100)
                         .pitch(20)
-                        .wait(200)
-                        .start(300)
-                        .duration(Some(400))
+                        .wait(300)
+                        .start(400)
+                        .duration(Some(500))
                         .stop(true)
                         .build()
                         .unwrap()
                 ),
             ])
             .to_string(),
-            "a 50 p10 w0.1 s0.2 d0.3 s; ~w1.0; b p20 w0.2 s0.3 d0.4 s".to_string()
+            "a 50 p10 w0.2 s0.3 d0.4 s; ~w1.0; b p20 w0.3 s0.4 d0.5 s".to_string()
         );
         assert_eq!(
             Commands(vec![
