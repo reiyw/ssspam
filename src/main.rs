@@ -49,7 +49,9 @@ use systemstat::{Platform, System};
 use ssspambot::{
     calc_sound_duration, load_sounds, load_sounds_try_from_cache,
     parser::{Action, Command, Commands, SayCommand},
-    play_source, prettify_sounds, search_impl, SoundDetail,
+    play_source, prettify_sounds, search_impl,
+    web::update_data_json,
+    SoundDetail,
 };
 use tokio::{
     fs::File,
@@ -917,6 +919,7 @@ async fn upload_impl(_ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
                 .await?;
         }
     }
+    update_data_json(SOUND_DIR.get().unwrap()).await?;
 
     Ok(mp3_count)
 }
@@ -947,6 +950,7 @@ async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
                     msg.reply(ctx, format!("Successfully deleted {}", name))
                         .await,
                 );
+                update_data_json(SOUND_DIR.get().unwrap()).await?;
             } else {
                 check_msg(
                     msg.reply(ctx, format!("Could not delete {} for some reason", name))

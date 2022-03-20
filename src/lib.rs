@@ -1,4 +1,5 @@
 pub mod parser;
+pub mod web;
 
 use std::{
     cmp,
