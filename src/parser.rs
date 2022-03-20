@@ -106,7 +106,7 @@ impl Commands {
                 Command::Say(cmd) => {
                     cmd.pitch = std::cmp::max(cmd.pitch, 1);
                     cmd.pitch = std::cmp::min(cmd.pitch, 200);
-                    cmd.wait = std::cmp::max(cmd.wait, 50);
+                    cmd.wait = std::cmp::max(cmd.wait, 100);
                 }
                 Command::Wait(_) => (),
             }
