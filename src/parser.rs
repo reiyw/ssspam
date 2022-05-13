@@ -196,7 +196,7 @@ fn say_arg(input: &str) -> IResult<&str, SayArg> {
 
 fn sound_name(input: &str) -> IResult<&str, &str> {
     ws(take_while1(|c: char| {
-        c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '^' || c == '!'
+        c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '^' || c == '!' || c == '.'
     }))(input)
 }
 
