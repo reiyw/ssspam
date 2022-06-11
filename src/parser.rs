@@ -48,7 +48,7 @@ impl Default for SayCommand {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Command {
     Say(SayCommand),
     Wait(u32),
@@ -101,16 +101,27 @@ impl Commands {
     }
 
     pub fn sanitize(&mut self) {
+        let mut cmds = Vec::new();
+        let mut consecutive_immediate_sounds = 0;
         for cmd in self.0.iter_mut() {
             match cmd {
                 Command::Say(cmd) => {
                     cmd.pitch = std::cmp::max(cmd.pitch, 1);
                     cmd.pitch = std::cmp::min(cmd.pitch, 200);
-                    cmd.wait = std::cmp::max(cmd.wait, 100);
+
+                    if consecutive_immediate_sounds >= 2 {
+                        continue;
+                    }
+
+                    if cmd.wait < 100 {
+                        consecutive_immediate_sounds += 1
+                    }
                 }
                 Command::Wait(_) => (),
             }
+            cmds.push(cmd.clone());
         }
+        self.0 = cmds;
     }
 }
 
