@@ -81,6 +81,7 @@ struct PlayInfo<'a> {
     cmd: &'a Command,
     source: Option<Arc<CachedSound>>,
     duration: Duration,
+    #[allow(dead_code)]
     wait_duration: Duration,
 }
 
@@ -168,7 +169,7 @@ async fn send_tracks(
                 cmd: Command::Say(cmd),
                 source: Some(source),
                 duration: dur,
-                wait_duration: wdur,
+                wait_duration: _,
             } => {
                 *estimated_duration = cmp::max(*estimated_duration, *elapsed + dur);
 
@@ -192,7 +193,8 @@ async fn send_tracks(
                     }
                 };
 
-                let track_handle = play_source((&*source).into(), handler_lock.clone(), volume_multiplier).await;
+                let track_handle =
+                    play_source((&*source).into(), handler_lock.clone(), volume_multiplier).await;
 
                 match cmd.action {
                     Action::Synthesize => {
