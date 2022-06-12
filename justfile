@@ -13,5 +13,5 @@ update-sounds today:
   gsutil cp {{today}}.zip gs://surfpvparena/{{today}}.zip
   rm {{today}}.zip
 
-  cargo run --release --bin gen_viewer -- --dest dist
+  cargo run --release --bin gen_viewer -- --dest dist --sound-dir dist/sound
   gsutil cp dist/data.json gs://surfpvparena/dist/data.json
