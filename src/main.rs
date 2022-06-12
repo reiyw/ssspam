@@ -81,6 +81,7 @@ struct PlayInfo<'a> {
     cmd: &'a Command,
     source: Option<Arc<CachedSound>>,
     duration: Duration,
+    wait_duration: Duration,
 }
 
 async fn get_or_make_source(
@@ -160,16 +161,38 @@ async fn send_tracks(
     estimated_duration: &mut Duration,
     elapsed: &mut Duration,
 ) {
+    let num_playing_sounds = Arc::new(Mutex::new(0));
     for play_info in play_infos {
         match play_info {
             PlayInfo {
                 cmd: Command::Say(cmd),
                 source: Some(source),
                 duration: dur,
+                wait_duration: wdur,
             } => {
                 *estimated_duration = cmp::max(*estimated_duration, *elapsed + dur);
 
-                let track_handle = play_source((&*source).into(), handler_lock.clone()).await;
+                {
+                    let num_playing_sounds = num_playing_sounds.clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(dur).await;
+                        let num_playing_sounds = num_playing_sounds.clone();
+                        let mut num_playing_sounds = num_playing_sounds.lock().await;
+                        *num_playing_sounds -= 1;
+                    });
+                }
+
+                let volume_multiplier = {
+                    let mut num_playing_sounds = num_playing_sounds.lock().await;
+                    *num_playing_sounds += 1;
+                    if *num_playing_sounds > 2 {
+                        1.0 / (*num_playing_sounds as f64)
+                    } else {
+                        1.0
+                    }
+                };
+
+                let track_handle = play_source((&*source).into(), handler_lock.clone(), volume_multiplier).await;
 
                 match cmd.action {
                     Action::Synthesize => {
@@ -260,30 +283,33 @@ async fn process_message(ctx: &Context, msg: &Message) {
 
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut play_infos: Vec<PlayInfo> = Vec::new();
-        let mut playable_sound_count = 0;
         for cmd in cmds.iter() {
             let info = match cmd {
                 Command::Say(saycmd) => {
                     match get_or_make_source(saycmd, sources_lock.clone()).await {
                         Some(source) => {
-                            playable_sound_count += 1;
-                            if playable_sound_count > 10 {
-                                break;
-                            }
-
                             let details = SOUND_DETAILS.read().await;
                             let detail = details.get(&saycmd.name.to_lowercase()).unwrap();
+
+                            let duration = calc_sound_duration(saycmd, &detail.duration);
+
+                            let wait_duration = match saycmd.action {
+                                Action::Synthesize => Duration::from_millis(saycmd.wait as u64),
+                                Action::Concat => duration,
+                            };
 
                             PlayInfo {
                                 cmd,
                                 source: Some(source),
-                                duration: calc_sound_duration(saycmd, &detail.duration),
+                                duration,
+                                wait_duration,
                             }
                         }
                         None => PlayInfo {
                             cmd,
                             source: None,
                             duration: Duration::from_secs(0),
+                            wait_duration: Duration::from_secs(0),
                         },
                     }
                 }
@@ -291,6 +317,7 @@ async fn process_message(ctx: &Context, msg: &Message) {
                     cmd,
                     source: None,
                     duration: Duration::from_millis(*n as u64),
+                    wait_duration: Duration::from_millis(*n as u64),
                 },
             };
             play_infos.push(info);

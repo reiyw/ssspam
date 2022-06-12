@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use songbird::{create_player, input::Input, tracks::TrackHandle, Call};
 use tokio::sync::Mutex;
 
-const VOLUME: f32 = 0.05;
+const VOLUME: f64 = 0.05;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SoundDetail {
@@ -165,9 +165,9 @@ pub fn load_sounds_try_from_cache<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<Stri
     }
 }
 
-pub async fn play_source(source: Input, handler_lock: Arc<Mutex<Call>>) -> TrackHandle {
+pub async fn play_source(source: Input, handler_lock: Arc<Mutex<Call>>, volume_multiplier: f64) -> TrackHandle {
     let (mut audio, audio_handle) = create_player(source);
-    audio.set_volume(VOLUME);
+    audio.set_volume((VOLUME * volume_multiplier) as f32);
     let mut handler = handler_lock.lock().await;
     handler.play(audio);
     audio_handle
@@ -221,11 +221,13 @@ pub fn prettify_sounds(sounds: impl Iterator<Item = SoundDetail>) -> String {
 
 /// Calculates the duration of the sound if the say command was played.
 pub fn calc_sound_duration(cmd: &SayCommand, original_duration: &Duration) -> Duration {
-    // TODO: need to deal with combinations of w and s, e.g., w1s
     let mut dur = cmp::max((original_duration.as_millis() as i64) - cmd.start as i64, 0);
     if let Some(n) = cmd.duration {
         dur = cmp::min(dur, n as i64)
     }
-    let dur = ((dur as f64) * (100.0 / cmd.speed as f64)) as u64;
-    Duration::from_millis(dur)
+    dur = ((dur as f64) * (100.0 / cmd.speed as f64)) as i64;
+    if cmd.stop {
+        dur = cmp::min(dur, cmd.wait as i64);
+    }
+    Duration::from_millis(dur as u64)
 }
