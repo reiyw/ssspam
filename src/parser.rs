@@ -102,19 +102,21 @@ impl Commands {
 
     pub fn sanitize(&mut self) {
         let mut cmds = Vec::new();
-        let mut consecutive_immediate_sounds = 0;
+        let mut consecutive_immediate_sounds = 1;
         for cmd in self.0.iter_mut() {
             match cmd {
                 Command::Say(cmd) => {
                     cmd.pitch = std::cmp::max(cmd.pitch, 1);
                     cmd.pitch = std::cmp::min(cmd.pitch, 200);
 
-                    if consecutive_immediate_sounds >= 2 {
+                    if consecutive_immediate_sounds > 2 {
                         continue;
                     }
 
                     if cmd.wait < 100 {
                         consecutive_immediate_sounds += 1
+                    } else {
+                        consecutive_immediate_sounds = 1;
                     }
                 }
                 Command::Wait(_) => (),
