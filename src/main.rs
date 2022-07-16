@@ -964,8 +964,9 @@ async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
         return Ok(());
     }
 
-    // let mut iter = msg.content.split_whitespace();
-    if let Some(name) = msg.content.split_whitespace().nth(1) {
+    let mut iter = msg.content.split_whitespace();
+    iter.next();
+    for name in iter {
         let mut sound_details = SOUND_DETAILS.write().await;
         if sound_details.remove(name).is_some() {
             let client = cloud_storage::Client::default();
@@ -989,8 +990,6 @@ async fn delete(ctx: &Context, msg: &Message) -> CommandResult {
         } else {
             check_msg(msg.reply(ctx, format!("Could not find {}", name)).await);
         }
-    } else {
-        check_msg(msg.reply(ctx, "Usage: `~delete <sound_name>`").await);
     }
 
     Ok(())
