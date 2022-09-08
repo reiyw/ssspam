@@ -1,4 +1,5 @@
 pub mod parser;
+pub mod sound;
 pub mod web;
 
 use std::{
