@@ -25,6 +25,8 @@ use serde::{Deserialize, Serialize};
 use songbird::{create_player, input::Input, tracks::TrackHandle, Call};
 use tokio::sync::Mutex;
 
+pub use sound::{Sound, SoundStorage};
+
 const VOLUME: f64 = 0.05;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

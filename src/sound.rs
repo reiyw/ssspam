@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
 use counter::Counter;
@@ -167,81 +169,91 @@ impl SoundStorage {
     pub fn len(&self) -> usize {
         self.sounds.len()
     }
+}
 
-    // TODO: たぶん Mutex 使わないと一度 watch し始めたらあとから不変参照取れなくなる。
-    pub async fn watch(&mut self) {
-        let (tx, mut rx) = mpsc::channel(1);
-        let handle = Handle::current();
-        let mut watcher = RecommendedWatcher::new(
-            move |res| {
-                handle.block_on(tx.send(res)).unwrap();
+pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
+    let (tx, mut rx) = mpsc::channel(1);
+    let handle = Handle::current();
+    let mut watcher = RecommendedWatcher::new(
+        move |res| {
+            handle.block_on(tx.send(res)).ok();
+        },
+        Config::default(),
+    )
+    .unwrap();
+
+    {
+        let storage = storage.read().unwrap();
+        watcher
+            .watch(&storage.dir, RecursiveMode::Recursive)
+            .unwrap();
+    }
+
+    while let Some(Ok(event)) = rx.recv().await {
+        if event.paths[0].extension() != Some(OsStr::new("mp3")) {
+            continue;
+        }
+        match event {
+            Event {
+                kind: EventKind::Create(CreateKind::File),
+                paths,
+                ..
+            }
+            | Event {
+                kind: EventKind::Modify(ModifyKind::Data(_)),
+                paths,
+                ..
+            } => match Sound::new_checked(&paths[0]) {
+                Ok(sound) => {
+                    let mut storage = storage.write().unwrap();
+                    storage.add(sound);
+                }
+                #[allow(unused_variables)]
+                Err(e) => {
+                    todo!();
+                }
             },
-            Config::default(),
-        )
-        .unwrap();
-
-        watcher.watch(&self.dir, RecursiveMode::Recursive).unwrap();
-
-        while let Some(Ok(event)) = rx.recv().await {
-            // if event.paths[0].extension() != Some(OsStr::new("mp3")) {
-            if event.paths[0].ends_with(".mp3") {
-                continue;
+            Event {
+                kind: EventKind::Remove(_),
+                paths,
+                ..
+            } => {
+                let mut storage = storage.write().unwrap();
+                storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
             }
-            match event {
-                Event {
-                    kind: EventKind::Create(CreateKind::File),
-                    paths,
-                    ..
+            Event {
+                kind: EventKind::Modify(ModifyKind::Name(rename_mode)),
+                paths,
+                ..
+            } => match rename_mode {
+                RenameMode::Any | RenameMode::Other => {
+                    if let Ok(sound) = Sound::new_checked(&paths[0]) {
+                        let mut storage = storage.write().unwrap();
+                        storage.add(sound);
+                    } else {
+                        let mut storage = storage.write().unwrap();
+                        storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
+                    }
                 }
-                | Event {
-                    kind: EventKind::Modify(ModifyKind::Data(_)),
-                    paths,
-                    ..
-                } => match Sound::new_checked(&paths[0]) {
-                    Ok(sound) => {
-                        self.add(sound);
-                    }
-                    #[allow(unused_variables)]
-                    Err(e) => {
-                        todo!();
-                    }
-                },
-                Event {
-                    kind: EventKind::Remove(_),
-                    paths,
-                    ..
-                } => {
-                    self.remove(paths[0].file_stem().unwrap().to_string_lossy());
+                RenameMode::From => {
+                    let mut storage = storage.write().unwrap();
+                    storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
                 }
-                Event {
-                    kind: EventKind::Modify(ModifyKind::Name(rename_mode)),
-                    paths,
-                    ..
-                } => match rename_mode {
-                    RenameMode::Any | RenameMode::Other => {
-                        if let Ok(sound) = Sound::new_checked(&paths[0]) {
-                            self.add(sound);
-                        } else {
-                            self.remove(paths[0].file_stem().unwrap().to_string_lossy());
-                        }
+                RenameMode::To => {
+                    if let Ok(sound) = Sound::new_checked(&paths[0]) {
+                        let mut storage = storage.write().unwrap();
+                        storage.add(sound);
                     }
-                    RenameMode::From => {
-                        self.remove(paths[0].file_stem().unwrap().to_string_lossy());
+                }
+                RenameMode::Both => {
+                    let mut storage = storage.write().unwrap();
+                    storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
+                    if let Ok(sound) = Sound::new_checked(&paths[1]) {
+                        storage.add(sound);
                     }
-                    RenameMode::To => {
-                        if let Ok(sound) = Sound::new_checked(&paths[0]) {
-                            self.add(sound);
-                        }
-                    }
-                    RenameMode::Both => {
-                        self.remove(paths[0].file_stem().unwrap().to_string_lossy());
-                        if let Ok(sound) = Sound::new_checked(&paths[1]) {
-                            self.add(sound);
-                        }
-                    }
-                },
-                _ => {}
-            }
+                }
+            },
+            _ => {}
         }
     }
 }
@@ -300,12 +312,58 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_watch() {
+    async fn test_watch_sound_storage() {
+        const DELAY: Duration = Duration::from_millis(100);
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut storage = SoundStorage::load(&temp_dir);
-        // storage.watch().await;
-        tokio::spawn(storage.watch()).await.unwrap();
-        assert!(storage.get("sainou").is_some());
+        let temp_dir_path = temp_dir.path();
+        let storage = Arc::new(RwLock::new(SoundStorage::load(&temp_dir)));
+        tokio::spawn(watch_sound_storage(Arc::clone(&storage)));
+        tokio::time::sleep(DELAY).await;
+
         let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sound");
+
+        fs::copy(
+            sound_dir.join("sainou.mp3"),
+            temp_dir_path.join("sainou.mp3"),
+        )
+        .unwrap();
+        tokio::time::sleep(DELAY).await;
+        {
+            let storage = storage.read().unwrap();
+            assert!(storage.get("sainou").is_some());
+        }
+
+        fs::copy(
+            sound_dir.join("dadeisan.mp3"),
+            temp_dir_path.join("dadeisan.mp3"),
+        )
+        .unwrap();
+        tokio::time::sleep(DELAY).await;
+        {
+            let storage = storage.read().unwrap();
+            assert!(storage.get("dadeisan").is_some());
+            assert_eq!(storage.len(), 2);
+        }
+
+        fs::remove_file(temp_dir_path.join("dadeisan.mp3")).unwrap();
+        tokio::time::sleep(DELAY).await;
+        {
+            let storage = storage.read().unwrap();
+            assert!(storage.get("dadeisan").is_none());
+            assert_eq!(storage.len(), 1);
+        }
+
+        fs::rename(
+            temp_dir_path.join("sainou.mp3"),
+            temp_dir_path.join("sainou2.mp3"),
+        )
+        .unwrap();
+        tokio::time::sleep(DELAY).await;
+        {
+            let storage = storage.read().unwrap();
+            assert!(storage.get("sainou").is_none());
+            assert!(storage.get("sainou2").is_some());
+            assert_eq!(storage.len(), 1);
+        }
     }
 }
