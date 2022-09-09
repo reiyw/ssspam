@@ -1,14 +1,13 @@
 pub mod parser;
+pub mod play;
 pub mod sound;
 pub mod sslang;
 pub mod web;
 
 use std::{
-    cmp,
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
     time::{Duration, SystemTime},
 };
 
@@ -20,16 +19,12 @@ extern crate derive_builder;
 use glob::glob;
 #[macro_use]
 extern crate prettytable;
-use parser::SayCommand;
 use prettytable::{format, Table};
 use serde::{Deserialize, Serialize};
-use songbird::{create_player, input::Input, tracks::TrackHandle, Call};
-use tokio::sync::Mutex;
 
+pub use play::{calc_sound_duration, play_source};
 pub use sound::{Sound, SoundStorage};
-pub use sslang::{SayCommands};
-
-const VOLUME: f64 = 0.05;
+pub use sslang::{SayCommand, SayCommands};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SoundDetail {
@@ -170,18 +165,6 @@ pub fn load_sounds_try_from_cache<P: AsRef<Path>>(sound_dir: P) -> BTreeMap<Stri
     }
 }
 
-pub async fn play_source(
-    source: Input,
-    handler_lock: Arc<Mutex<Call>>,
-    volume_multiplier: f64,
-) -> TrackHandle {
-    let (mut audio, audio_handle) = create_player(source);
-    audio.set_volume((VOLUME * volume_multiplier) as f32);
-    let mut handler = handler_lock.lock().await;
-    handler.play(audio);
-    audio_handle
-}
-
 pub fn search_impl<S: AsRef<str>, T: AsRef<str>>(
     query: S,
     target: impl Iterator<Item = T>,
@@ -226,17 +209,4 @@ pub fn prettify_sounds(sounds: impl Iterator<Item = SoundDetail>) -> String {
     }
 
     table.to_string()
-}
-
-/// Calculates the duration of the sound if the say command was played.
-pub fn calc_sound_duration(cmd: &SayCommand, original_duration: &Duration) -> Duration {
-    let mut dur = cmp::max((original_duration.as_millis() as i64) - cmd.start as i64, 0);
-    if let Some(n) = cmd.duration {
-        dur = cmp::min(dur, n as i64)
-    }
-    dur = ((dur as f64) * (100.0 / cmd.speed as f64)) as i64;
-    if cmd.stop {
-        dur = cmp::min(dur, cmd.wait as i64);
-    }
-    Duration::from_millis(dur as u64)
 }
