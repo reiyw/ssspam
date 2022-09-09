@@ -1,5 +1,6 @@
 pub mod parser;
 pub mod sound;
+pub mod sslang;
 pub mod web;
 
 use std::{
@@ -26,6 +27,7 @@ use songbird::{create_player, input::Input, tracks::TrackHandle, Call};
 use tokio::sync::Mutex;
 
 pub use sound::{Sound, SoundStorage};
+pub use sslang::{SayCommands};
 
 const VOLUME: f64 = 0.05;
 
