@@ -1,3 +1,4 @@
+pub mod command;
 pub mod parser;
 pub mod play;
 pub mod sound;
@@ -22,9 +23,14 @@ extern crate prettytable;
 use prettytable::{format, Table};
 use serde::{Deserialize, Serialize};
 
-pub use play::{calc_sound_duration, play_source};
-pub use sound::{Sound, SoundStorage};
-pub use sslang::{SayCommand, SayCommands};
+pub use crate::{
+    command::{
+        join, leave, mute, unmute, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND, UNMUTE_COMMAND,
+    },
+    play::{calc_sound_duration, play_source},
+    sound::{Sound, SoundStorage},
+    sslang::{SayCommand, SayCommands},
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SoundDetail {
