@@ -1,6 +1,4 @@
-use std::cmp;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{cmp, sync::Arc, time::Duration};
 
 use songbird::{create_player, input::Input, tracks::TrackHandle, Call};
 use tokio::sync::Mutex;

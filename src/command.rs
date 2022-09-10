@@ -1,42 +1,13 @@
-use std::{collections::HashMap, sync::Arc};
-
 use anyhow::Context as _;
 use log::warn;
-use parking_lot::RwLock;
 use serenity::{
     client::Context,
     framework::standard::{macros::command, CommandResult},
-    model::{
-        channel::Message,
-        id::{ChannelId, GuildId, UserId},
-        prelude::VoiceState,
-    },
-    prelude::{Mentionable, TypeMapKey},
+    model::{channel::Message, prelude::VoiceState},
+    prelude::Mentionable,
 };
 
-/// Keeps track of channels where the bot joining.
-#[derive(Debug, Clone, Default)]
-pub struct ChannelManager {
-    channels: HashMap<GuildId, ChannelId>,
-}
-
-impl ChannelManager {
-    fn join(&mut self, guild_id: GuildId, channel_id: ChannelId) -> Option<ChannelId> {
-        self.channels.insert(guild_id, channel_id)
-    }
-
-    fn leave(&mut self, guild_id: &GuildId) -> Option<ChannelId> {
-        self.channels.remove(guild_id)
-    }
-
-    fn get(&self, guild_id: &GuildId) -> Option<&ChannelId> {
-        self.channels.get(guild_id)
-    }
-}
-
-impl TypeMapKey for ChannelManager {
-    type Value = Arc<RwLock<Self>>;
-}
+use super::ChannelManager;
 
 #[command]
 #[only_in(guilds)]
@@ -49,11 +20,11 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 
 async fn join_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
-    let channel_id = guild
+    let voice_channel_id = guild
         .voice_states
         .get(&msg.author.id)
         .and_then(|voice_state| voice_state.channel_id);
-    let channel_id = match channel_id {
+    let voice_channel_id = match voice_channel_id {
         Some(c) => c,
         None => {
             msg.reply(ctx, "Not in a voice channel").await?;
@@ -66,10 +37,10 @@ async fn join_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let (_handler_lock, success_reader) = manager.join(guild.id, channel_id).await;
+    let (_handler_lock, success_reader) = manager.join(guild.id, voice_channel_id).await;
     if success_reader.is_ok() {
         msg.channel_id
-            .say(&ctx.http, &format!("Joined {}", channel_id.mention()))
+            .say(&ctx.http, &format!("Joined {}", voice_channel_id.mention()))
             .await?;
         let channel_manager = ctx
             .data
@@ -78,7 +49,9 @@ async fn join_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
             .get::<ChannelManager>()
             .context("Could not get ChannelManager")?
             .clone();
-        channel_manager.write().join(guild.id, channel_id);
+        channel_manager
+            .write()
+            .join(guild.id, voice_channel_id, msg.channel_id);
     } else {
         msg.channel_id
             .say(&ctx.http, "Error joining the channel")
@@ -132,7 +105,9 @@ pub async fn leave_based_on_voice_state_update(
                 .get::<ChannelManager>()
                 .context("Could not get ChannelManager")?
                 .clone();
-            let bots_voice_channel_id = channel_manager.read().get(&guild_id).cloned();
+            let bots_voice_channel_id = channel_manager
+                .read()
+                .get_voice_channel_id(&guild_id);
             let authors_old_state_voice_channel_id = old_state.channel_id;
             if bots_voice_channel_id != authors_old_state_voice_channel_id {
                 return Ok(());

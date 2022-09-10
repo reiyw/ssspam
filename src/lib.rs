@@ -1,4 +1,5 @@
 pub mod command;
+pub mod core;
 pub mod parser;
 pub mod play;
 pub mod sound;
@@ -26,8 +27,9 @@ use serde::{Deserialize, Serialize};
 pub use crate::{
     command::{
         leave_based_on_voice_state_update, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND,
-        UNMUTE_COMMAND, ChannelManager,
+        UNMUTE_COMMAND,
     },
+    core::{process_message, ChannelManager},
     play::{calc_sound_duration, play_source},
     sound::{Sound, SoundStorage},
     sslang::{SayCommand, SayCommands},

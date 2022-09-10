@@ -29,7 +29,7 @@ use songbird::{
 };
 use ssspambot::{
     leave_based_on_voice_state_update, sound::watch_sound_storage, ChannelManager, SoundStorage,
-    JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND, UNMUTE_COMMAND,
+    JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND, UNMUTE_COMMAND, process_message,
 };
 
 struct Handler;
@@ -40,7 +40,11 @@ impl EventHandler for Handler {
         info!("{} is connected!", ready.user.name);
     }
 
-    async fn message(&self, _ctx: Context, _new_message: Message) {}
+    async fn message(&self, ctx: Context, msg: Message) {
+        if let Err(e) = process_message(&ctx, &msg).await {
+            warn!("Error while processing a message: {e:?}");
+        }
+    }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, _new: VoiceState) {
         if let Err(e) = leave_based_on_voice_state_update(ctx, old).await {
