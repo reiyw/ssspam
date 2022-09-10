@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Context as _;
 use log::warn;
@@ -19,7 +16,7 @@ use serenity::{
 
 /// Keeps track of channels where the bot joining.
 #[derive(Debug, Clone, Default)]
-struct ChannelManager {
+pub struct ChannelManager {
     channels: HashMap<GuildId, ChannelId>,
 }
 
@@ -30,6 +27,10 @@ impl ChannelManager {
 
     fn leave(&mut self, guild_id: &GuildId) -> Option<ChannelId> {
         self.channels.remove(guild_id)
+    }
+
+    fn get(&self, guild_id: &GuildId) -> Option<&ChannelId> {
+        self.channels.get(guild_id)
     }
 }
 
@@ -115,6 +116,48 @@ async fn leave_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         .clone();
     channel_manager.write().leave(&guild.id);
 
+    Ok(())
+}
+
+pub async fn leave_based_on_voice_state_update(
+    ctx: Context,
+    old_state: Option<VoiceState>,
+) -> anyhow::Result<()> {
+    if let Some(old_state) = old_state {
+        if let Some(guild_id) = old_state.guild_id {
+            let channel_manager = ctx
+                .data
+                .read()
+                .await
+                .get::<ChannelManager>()
+                .context("Could not get ChannelManager")?
+                .clone();
+            let bots_voice_channel_id = channel_manager.read().get(&guild_id).cloned();
+            let authors_old_state_voice_channel_id = old_state.channel_id;
+            if bots_voice_channel_id != authors_old_state_voice_channel_id {
+                return Ok(());
+            }
+
+            if let Some(bots_voice_channel_id) = bots_voice_channel_id {
+                let channel = ctx
+                    .cache
+                    .guild_channel(bots_voice_channel_id)
+                    .context("Failed to get GuildChannel")?;
+                let members = channel
+                    .members(&ctx.cache)
+                    .await
+                    .context("Should get members")?;
+                if members.len() == 1 && members[0].user.bot {
+                    let manager = songbird::get(&ctx)
+                        .await
+                        .context("Songbird Voice client placed in at initialization.")?
+                        .clone();
+                    manager.remove(guild_id).await?;
+                    channel_manager.write().leave(&guild_id);
+                }
+            }
+        }
+    }
     Ok(())
 }
 

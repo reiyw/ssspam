@@ -1,13 +1,8 @@
-use std::{
-    collections::HashMap,
-    convert::TryInto,
-    env,
-    path::PathBuf,
-    sync::{Arc},
-};
+use std::{collections::HashMap, convert::TryInto, env, path::PathBuf, sync::Arc};
 
 use clap::Parser;
 use dotenv::dotenv;
+use log::{info, warn};
 use once_cell::sync::{Lazy, OnceCell};
 use parking_lot::RwLock;
 use serenity::{
@@ -20,7 +15,7 @@ use serenity::{
         },
         StandardFramework,
     },
-    model::{channel::Message, gateway::Ready},
+    model::{channel::Message, gateway::Ready, voice::VoiceState},
     prelude::{GatewayIntents, Mentionable, TypeMapKey},
     Result as SerenityResult,
 };
@@ -33,19 +28,24 @@ use songbird::{
     Call, Event, EventContext, EventHandler as VoiceEventHandler, SerenityInit, TrackEvent,
 };
 use ssspambot::{
-    sound::watch_sound_storage, SoundStorage, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND,
-    UNMUTE_COMMAND,
+    leave_based_on_voice_state_update, sound::watch_sound_storage, ChannelManager, SoundStorage,
+    JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND, UNMUTE_COMMAND,
 };
-
-// static SOUND_STORAGE: Lazy<Arc<RwLock<SoundStorage>>> = Lazy::default();
-// static SOUND_STORAGE: OnceCell<Arc<RwLock<SoundStorage>>> = OnceCell::new();
 
 struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+        info!("{} is connected!", ready.user.name);
+    }
+
+    async fn message(&self, _ctx: Context, _new_message: Message) {}
+
+    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, _new: VoiceState) {
+        if let Err(e) = leave_based_on_voice_state_update(ctx, old).await {
+            warn!("Error while deciding whether to leave: {e:?}");
+        }
     }
 }
 
@@ -72,7 +72,23 @@ async fn main() -> anyhow::Result<()> {
 
     let opt = Opt::parse();
 
-    // fern::Dispatch::new().
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{}[{}][{}] {}",
+                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level(opt.verbose.log_level_filter())
+        .level_for("tracing", log::LevelFilter::Warn)
+        .level_for("serenity", log::LevelFilter::Warn)
+        .level_for("songbird", log::LevelFilter::Warn)
+        .level_for("rustls", log::LevelFilter::Warn)
+        .chain(std::io::stderr())
+        .apply()?;
 
     let framework = StandardFramework::new()
         .configure(|c| c.prefix("-"))
@@ -97,6 +113,8 @@ async fn main() -> anyhow::Result<()> {
         let storage = Arc::new(RwLock::new(SoundStorage::load(&opt.sound_dir)));
         tokio::spawn(watch_sound_storage(Arc::clone(&storage)));
         data.insert::<SoundStorage>(storage);
+
+        data.insert::<ChannelManager>(Arc::new(RwLock::new(ChannelManager::default())));
     }
 
     let shard_manager = client.shard_manager.clone();

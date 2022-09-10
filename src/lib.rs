@@ -25,7 +25,8 @@ use serde::{Deserialize, Serialize};
 
 pub use crate::{
     command::{
-        join, leave, mute, unmute, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND, UNMUTE_COMMAND,
+        leave_based_on_voice_state_update, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND,
+        UNMUTE_COMMAND, ChannelManager,
     },
     play::{calc_sound_duration, play_source},
     sound::{Sound, SoundStorage},
