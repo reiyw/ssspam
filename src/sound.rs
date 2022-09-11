@@ -11,6 +11,7 @@ use std::{
 use anyhow::Context as _;
 use counter::Counter;
 use glob::glob;
+use log::{info, warn};
 use notify::{
     event::{CreateKind, ModifyKind, RenameMode},
     Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
@@ -125,7 +126,7 @@ pub struct SoundStorage {
     /// Lowercased name to [`Sound`].
     sounds: BTreeMap<String, SoundFile>,
 
-    dir: PathBuf,
+    pub dir: PathBuf,
 }
 
 impl SoundStorage {
@@ -147,11 +148,11 @@ impl SoundStorage {
         self.sounds.get(&name.as_ref().to_lowercase())
     }
 
-    pub fn remove(&mut self, name: impl AsRef<str>) -> Option<SoundFile> {
+    fn remove(&mut self, name: impl AsRef<str>) -> Option<SoundFile> {
         self.sounds.remove(&name.as_ref().to_lowercase())
     }
 
-    pub fn add(&mut self, sound: SoundFile) -> Option<SoundFile> {
+    fn add(&mut self, sound: SoundFile) -> Option<SoundFile> {
         self.sounds.insert(sound.name.to_lowercase(), sound)
     }
 
@@ -202,6 +203,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
         if event.paths[0].extension() != Some(OsStr::new("mp3")) {
             continue;
         }
+        info!("Event in the sound directory: {event:?}");
         match event {
             Event {
                 kind: EventKind::Create(CreateKind::File),
@@ -217,9 +219,8 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                     let mut storage = storage.write();
                     storage.add(sound);
                 }
-                #[allow(unused_variables)]
                 Err(e) => {
-                    todo!();
+                    warn!("Error loading a sound file {:?}: {e:?}", paths[0]);
                 }
             },
             Event {

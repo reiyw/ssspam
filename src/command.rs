@@ -1,16 +1,27 @@
+use std::{fs, path::PathBuf};
+
 use anyhow::Context as _;
-use log::{warn, info};
+use async_zip::read::mem::ZipFileReader;
+use log::{info, warn};
 use serenity::{
     client::Context,
-    framework::standard::{macros::command, CommandResult},
-    model::{channel::Message, prelude::VoiceState},
+    framework::standard::{
+        macros::{check, command, group},
+        Args, CommandResult, Reason,
+    },
+    model::{channel::Message, id::UserId, prelude::VoiceState},
     prelude::Mentionable,
 };
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{ChannelManager, GuildBroadcast, OpsMessage};
+use crate::{ChannelManager, GuildBroadcast, OpsMessage, SaySoundCache, SoundStorage};
+
+#[group]
+#[only_in(guilds)]
+#[commands(join, leave, mute, unmute, stop)]
+struct General;
 
 #[command]
-#[only_in(guilds)]
 pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
     if let Err(e) = join_impl(ctx, msg).await {
         warn!("Error joining the channel: {e:?}");
@@ -62,7 +73,6 @@ async fn join_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
 }
 
 #[command]
-#[only_in(guilds)]
 pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
     if let Err(e) = leave_impl(ctx, msg).await {
         warn!("Error leaving the channel: {e:?}");
@@ -135,7 +145,6 @@ pub async fn leave_based_on_voice_state_update(
 }
 
 #[command]
-#[only_in(guilds)]
 pub async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
     if let Err(e) = mute_impl(ctx, msg).await {
         warn!("Failed to mute: {e:?}");
@@ -167,7 +176,6 @@ async fn mute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
 }
 
 #[command]
-#[only_in(guilds)]
 pub async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
     if let Err(e) = unmute_impl(ctx, msg).await {
         warn!("Failed to unmute: {e:?}");
@@ -199,7 +207,6 @@ async fn unmute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
 }
 
 #[command]
-#[only_in(guilds)]
 pub async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
     if let Err(e) = stop_impl(ctx, msg).await {
         warn!("Failed to stop: {e:?}");
@@ -235,5 +242,175 @@ async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     let tx = guild_broadcast.lock().get_sender(guild.id);
     tx.send(OpsMessage::Stop)?;
 
+    Ok(())
+}
+
+#[group]
+#[owners_only]
+#[only_in(guilds)]
+#[commands(upload, delete)]
+struct Owner;
+
+#[command]
+pub async fn upload(ctx: &Context, msg: &Message) -> CommandResult {
+    match upload_impl(ctx, msg).await {
+        Ok(n) => {
+            msg.reply(ctx, format!("Successfully uploaded {n} sounds"))
+                .await
+                .ok();
+        }
+        Err(e) => {
+            msg.reply(ctx, format!("Failed to upload: {e:?}"))
+                .await
+                .ok();
+        }
+    }
+    Ok(())
+}
+
+async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
+    let mut count = 0;
+    let storage = ctx
+        .data
+        .read()
+        .await
+        .get::<SoundStorage>()
+        .context("Could not get SoundStorage")?
+        .clone();
+    let client = cloud_storage::Client::default();
+
+    for attachment in &msg.attachments {
+        let content = attachment.download().await?;
+
+        if attachment.filename.ends_with(".zip") {
+            let mut zip = ZipFileReader::new(&content[..]).await?;
+            for i in 0..zip.entries().len() {
+                let reader = zip.entry_reader(i).await?;
+                let entry = reader.entry();
+
+                if entry.dir() || !entry.name().ends_with(".mp3") {
+                    continue;
+                }
+
+                let out_path = storage
+                    .read()
+                    .dir
+                    .join(PathBuf::from(entry.name()).file_name().unwrap());
+                let mut output = tokio::fs::File::create(&out_path).await?;
+                reader.copy_to_end_crc(&mut output, 65536).await?;
+                count += 1;
+
+                let mut file = tokio::fs::File::open(&out_path).await?;
+                let mut content = vec![];
+                file.read_to_end(&mut content).await?;
+                client
+                    .object()
+                    .create(
+                        "surfpvparena",
+                        content,
+                        &format!(
+                            "dist/sound/{}",
+                            out_path.file_name().unwrap().to_str().unwrap()
+                        ),
+                        "audio/mpeg",
+                    )
+                    .await?;
+            }
+        } else if attachment.filename.ends_with(".mp3") {
+            let out_path = storage.read().dir.join(&attachment.filename);
+            let mut file = tokio::fs::File::create(&out_path).await?;
+            file.write_all(&content).await?;
+            count += 1;
+
+            client
+                .object()
+                .create(
+                    "surfpvparena",
+                    content,
+                    &format!(
+                        "dist/sound/{}",
+                        out_path.file_name().unwrap().to_str().unwrap()
+                    ),
+                    "audio/mpeg",
+                )
+                .await?;
+        }
+    }
+
+    // TODO: update data.json
+
+    clean_cache_impl(ctx).await?;
+
+    Ok(count)
+}
+
+#[command]
+pub async fn delete(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    if args.is_empty() {
+        msg.reply(
+            ctx,
+            "Specify one or more saysound names, separated by spaces.",
+        )
+        .await
+        .ok();
+        return Ok(());
+    }
+
+    match delete_impl(ctx, msg, args).await {
+        Ok(deleted) if !deleted.is_empty() => {
+            msg.reply(ctx, format!("Deleted: {}", deleted.join(", ")))
+                .await
+                .ok();
+        }
+        Ok(deleted) if deleted.is_empty() => {
+            msg.reply(ctx, "The given saysounds were not found")
+                .await
+                .ok();
+        }
+        Ok(_) => unreachable!(),
+        Err(e) => {
+            msg.reply(ctx, format!("Failed to delete: {e:?}"))
+                .await
+                .ok();
+        }
+    }
+    Ok(())
+}
+
+async fn delete_impl(ctx: &Context, msg: &Message, mut args: Args) -> anyhow::Result<Vec<String>> {
+    let storage = ctx
+        .data
+        .read()
+        .await
+        .get::<SoundStorage>()
+        .context("Could not get SoundStorage")?
+        .clone();
+    let client = cloud_storage::Client::default();
+    let mut deleted = Vec::new();
+
+    for name in args.iter::<String>().flatten() {
+        if let Some(file) = storage.read().get(name) {
+            if fs::remove_file(&file.path).is_ok() {
+                deleted.push(file.name.clone());
+            }
+        }
+    }
+
+    // TODO: delete from gcs and update data.json
+
+    clean_cache_impl(ctx).await?;
+
+    Ok(deleted)
+}
+
+async fn clean_cache_impl(ctx: &Context) -> anyhow::Result<()> {
+    ctx.data
+        .read()
+        .await
+        .get::<SaySoundCache>()
+        .context("Could not get SaySoundCache")?
+        .clone()
+        .write()
+        .clean();
     Ok(())
 }

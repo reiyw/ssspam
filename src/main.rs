@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
 use dotenv::dotenv;
@@ -7,15 +7,14 @@ use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
-    framework::{standard::macros::group, StandardFramework},
-    model::{channel::Message, gateway::Ready, voice::VoiceState},
+    framework::StandardFramework,
+    model::{channel::Message, gateway::Ready, id::UserId, voice::VoiceState},
     prelude::GatewayIntents,
 };
 use songbird::SerenityInit;
 use ssspambot::{
     leave_based_on_voice_state_update, process_message, sound::watch_sound_storage, ChannelManager,
-    GuildBroadcast, SaySoundCache, SoundStorage, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND,
-    STOP_COMMAND, UNMUTE_COMMAND,
+    GuildBroadcast, SaySoundCache, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
 };
 
 struct Handler;
@@ -38,10 +37,6 @@ impl EventHandler for Handler {
         }
     }
 }
-
-#[group]
-#[commands(join, leave, mute, unmute, stop)]
-struct General;
 
 #[derive(Parser)]
 #[clap(version, about)]
@@ -81,8 +76,15 @@ async fn main() -> anyhow::Result<()> {
         .apply()?;
 
     let framework = StandardFramework::new()
-        .configure(|c| c.prefix("-"))
-        .group(&GENERAL_GROUP);
+        .configure(|c| {
+            c.prefix("-").owners(HashSet::from([
+                // TODO: Use Discord's team feature
+                UserId(310620137608970240), // auzen
+                UserId(342903795380125698), // nicotti
+            ]))
+        })
+        .group(&GENERAL_GROUP)
+        .group(&OWNER_GROUP);
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 

@@ -40,6 +40,10 @@ impl SaySoundCache {
     fn insert(&mut self, say_command: SayCommand, say_sound: DecodedSaySound) {
         self.cache.insert(say_command, say_sound);
     }
+
+    pub fn clean(&mut self) {
+        self.cache.invalidate_all();
+    }
 }
 
 impl TypeMapKey for SaySoundCache {

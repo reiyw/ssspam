@@ -126,7 +126,11 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
     }
 
     let saycmds = {
-        let mut saycmds = SayCommands::from_str(&msg.content)?;
+        let mut saycmds = match SayCommands::from_str(&msg.content) {
+            Ok(saycmds) => saycmds,
+            // A parse failure does not imply an error because normal messages also exist.
+            Err(_) => return Ok(()),
+        };
         if saycmds.is_empty() {
             return Ok(());
         }
