@@ -1,17 +1,17 @@
 use std::{fs::File, io::Write, path::PathBuf};
 
+use clap::Parser;
 use dotenv::dotenv;
 use maud::{html, PreEscaped, DOCTYPE};
 use ssspambot::web::gen_data_json_from_sound_dir;
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "gen_viewer")]
+#[derive(Parser)]
+#[clap(version, about)]
 struct Opt {
-    #[structopt(long, parse(from_os_str), env)]
+    #[clap(long, env, value_parser)]
     sound_dir: PathBuf,
 
-    #[structopt(long, parse(from_os_str))]
+    #[clap(long, value_parser)]
     dest: PathBuf,
 }
 

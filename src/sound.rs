@@ -31,7 +31,7 @@ struct Metadata {
 
 impl Metadata {
     fn load<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
-        let data = mp3_metadata::read_from_file(path.as_ref())?;
+        let data = mp3_metadata::read_from_file(path.as_ref()).map_err(|e| anyhow::anyhow!(e))?;
         let freqs: Counter<_> = data.frames.iter().map(|f| f.sampling_freq).collect();
         let sample_rate_hz = freqs.most_common()[0].0 as u32;
         let channel_counts: Counter<_> = data
