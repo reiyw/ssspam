@@ -13,7 +13,7 @@ use serenity::{
     prelude::{GatewayIntents, Mentionable, TypeMapKey},
 };
 
-use super::SayCommands;
+use super::{play_say_commands, SayCommands};
 
 /// Keeps track of channels where the bot joining.
 #[derive(Debug, Clone, Default)]
@@ -85,10 +85,5 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
         saycmds
     };
 
-    let manager = songbird::get(&ctx)
-        .await
-        .context("Songbird Voice client placed in at initialization.")?
-        .clone();
-
-    Ok(())
+    play_say_commands(saycmds, ctx, guild.id).await
 }

@@ -1,23 +1,24 @@
 #![allow(dead_code)]
-use std::collections::BTreeMap;
-use std::ffi::OsStr;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc};
-use std::time::{Duration, SystemTime};
+use std::{
+    collections::BTreeMap,
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use counter::Counter;
 use glob::glob;
-use notify::event::{CreateKind, ModifyKind, RenameMode};
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+    event::{CreateKind, ModifyKind, RenameMode},
+    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
-use rand::rngs::StdRng;
-use rand::seq::IteratorRandom;
-use rand::SeedableRng;
+use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 use serenity::prelude::TypeMapKey;
-use tokio::runtime::Handle;
-use tokio::sync::mpsc;
+use tokio::{runtime::Handle, sync::mpsc};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Metadata {
@@ -54,7 +55,7 @@ impl Metadata {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Sound {
+pub struct SoundFile {
     pub name: String,
     pub path: PathBuf,
 
@@ -64,7 +65,7 @@ pub struct Sound {
     metadata: OnceCell<Metadata>,
 }
 
-impl Sound {
+impl SoundFile {
     /// Initializes [`Sound`] without loading metadata.
     fn new_unchecked<P: AsRef<Path>>(path: P) -> Self {
         Self {
@@ -116,7 +117,7 @@ impl Sound {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SoundStorage {
     /// Lowercased name to [`Sound`].
-    sounds: BTreeMap<String, Sound>,
+    sounds: BTreeMap<String, SoundFile>,
 
     dir: PathBuf,
 }
@@ -127,7 +128,7 @@ impl SoundStorage {
         for path in
             (glob(&format!("{}/**/*.mp3", dir.as_ref().to_string_lossy())).unwrap()).flatten()
         {
-            let sound = Sound::new_unchecked(&path);
+            let sound = SoundFile::new_unchecked(&path);
             sounds.insert(sound.name.to_lowercase(), sound);
         }
         Self {
@@ -136,24 +137,24 @@ impl SoundStorage {
         }
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Option<&Sound> {
+    pub fn get(&self, name: impl AsRef<str>) -> Option<&SoundFile> {
         self.sounds.get(&name.as_ref().to_lowercase())
     }
 
-    pub fn remove(&mut self, name: impl AsRef<str>) -> Option<Sound> {
+    pub fn remove(&mut self, name: impl AsRef<str>) -> Option<SoundFile> {
         self.sounds.remove(&name.as_ref().to_lowercase())
     }
 
-    pub fn add(&mut self, sound: Sound) -> Option<Sound> {
+    pub fn add(&mut self, sound: SoundFile) -> Option<SoundFile> {
         self.sounds.insert(sound.name.to_lowercase(), sound)
     }
 
-    pub fn get_random(&self) -> Option<&Sound> {
+    pub fn get_random(&self) -> Option<&SoundFile> {
         let mut rng: StdRng = SeedableRng::from_entropy();
         self.sounds.values().choose(&mut rng)
     }
 
-    pub fn calc_similarities(&self, query: impl AsRef<str>) -> Vec<(f64, &Sound)> {
+    pub fn calc_similarities(&self, query: impl AsRef<str>) -> Vec<(f64, &SoundFile)> {
         let mut sims: Vec<_> = self
             .sounds
             .iter()
@@ -205,7 +206,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 kind: EventKind::Modify(ModifyKind::Data(_)),
                 paths,
                 ..
-            } => match Sound::new_checked(&paths[0]) {
+            } => match SoundFile::new_checked(&paths[0]) {
                 Ok(sound) => {
                     let mut storage = storage.write();
                     storage.add(sound);
@@ -229,7 +230,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 ..
             } => match rename_mode {
                 RenameMode::Any | RenameMode::Other => {
-                    if let Ok(sound) = Sound::new_checked(&paths[0]) {
+                    if let Ok(sound) = SoundFile::new_checked(&paths[0]) {
                         let mut storage = storage.write();
                         storage.add(sound);
                     } else {
@@ -242,7 +243,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                     storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
                 }
                 RenameMode::To => {
-                    if let Ok(sound) = Sound::new_checked(&paths[0]) {
+                    if let Ok(sound) = SoundFile::new_checked(&paths[0]) {
                         let mut storage = storage.write();
                         storage.add(sound);
                     }
@@ -250,7 +251,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 RenameMode::Both => {
                     let mut storage = storage.write();
                     storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
-                    if let Ok(sound) = Sound::new_checked(&paths[1]) {
+                    if let Ok(sound) = SoundFile::new_checked(&paths[1]) {
                         storage.add(sound);
                     }
                 }
@@ -271,7 +272,7 @@ mod test {
     #[test]
     fn test_sound() {
         let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sound");
-        let sound = Sound::new_unchecked(sound_dir.join("sainou.mp3"));
+        let sound = SoundFile::new_unchecked(sound_dir.join("sainou.mp3"));
         assert_eq!(sound.name, "sainou".to_string());
         assert_eq!(sound.path, sound_dir.join("sainou.mp3"));
         assert_eq!(sound.sample_rate_hz(), 44100);

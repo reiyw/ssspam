@@ -1,4 +1,4 @@
-use std::{collections::HashMap, convert::TryInto, env, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, convert::TryInto, env, path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
 use dotenv::dotenv;
@@ -28,8 +28,8 @@ use songbird::{
     Call, Event, EventContext, EventHandler as VoiceEventHandler, SerenityInit, TrackEvent,
 };
 use ssspambot::{
-    leave_based_on_voice_state_update, sound::watch_sound_storage, ChannelManager, SoundStorage,
-    JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND, UNMUTE_COMMAND, process_message,
+    leave_based_on_voice_state_update, process_message, sound::watch_sound_storage, ChannelManager,
+    SaySoundCache, SoundStorage, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND, UNMUTE_COMMAND,
 };
 
 struct Handler;
@@ -119,6 +119,11 @@ async fn main() -> anyhow::Result<()> {
         data.insert::<SoundStorage>(storage);
 
         data.insert::<ChannelManager>(Arc::new(RwLock::new(ChannelManager::default())));
+
+        data.insert::<SaySoundCache>(Arc::new(RwLock::new(SaySoundCache::new(
+            50,
+            Duration::from_secs(60 * 10),
+        ))));
     }
 
     let shard_manager = client.shard_manager.clone();
