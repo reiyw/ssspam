@@ -348,7 +348,7 @@ pub async fn st(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[group]
 #[owners_only]
 #[only_in(guilds)]
-#[commands(upload, delete)]
+#[commands(upload, delete, shutdown)]
 struct Owner;
 
 #[command]
@@ -501,4 +501,10 @@ async fn delete_impl(ctx: &Context, msg: &Message, mut args: Args) -> anyhow::Re
     clean_cache_impl(ctx).await?;
 
     Ok(deleted)
+}
+
+#[command]
+pub async fn shutdown(ctx: &Context, msg: &Message) -> CommandResult {
+    // TODO: Gracefully shutdown using channels
+    std::process::exit(0);
 }
