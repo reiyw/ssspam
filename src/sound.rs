@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::{
     collections::BTreeMap,
     ffi::OsStr,
@@ -68,7 +67,7 @@ pub struct SoundFile {
 }
 
 impl SoundFile {
-    /// Initializes [`Sound`] without loading metadata.
+    /// Initializes [`SoundFile`] without loading metadata.
     fn new_unchecked<P: AsRef<Path>>(path: P) -> Self {
         Self {
             name: path.as_ref().file_stem().unwrap().to_string_lossy().into(),
@@ -77,7 +76,7 @@ impl SoundFile {
         }
     }
 
-    /// Initializes [`Sound`] with the metadata loaded.
+    /// Initializes [`SoundFile`] with the metadata loaded.
     ///
     /// Use this method if the input file is unreliable as sound data.
     fn new_checked<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
@@ -142,6 +141,10 @@ impl SoundStorage {
             sounds,
             dir: dir.as_ref().into(),
         }
+    }
+
+    pub fn files(&self) -> std::collections::btree_map::Values<String, SoundFile> {
+        self.sounds.values()
     }
 
     pub fn get(&self, name: impl AsRef<str>) -> Option<&SoundFile> {

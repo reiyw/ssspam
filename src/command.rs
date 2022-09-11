@@ -16,7 +16,10 @@ use serenity::{
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{ChannelManager, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache, SoundStorage};
+use crate::{
+    web::update_data_json, ChannelManager, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache,
+    SoundStorage,
+};
 
 #[group]
 #[only_in(guilds)]
@@ -437,7 +440,7 @@ async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
         }
     }
 
-    // TODO: update data.json
+    tokio::spawn(update_data_json(storage.read().dir.clone()));
 
     clean_cache_impl(ctx).await?;
 
@@ -456,7 +459,7 @@ pub async fn delete(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         return Ok(());
     }
 
-    match delete_impl(ctx, msg, args).await {
+    match delete_impl(ctx, args).await {
         Ok(deleted) if !deleted.is_empty() => {
             msg.reply(ctx, format!("Deleted: {}", deleted.join(", ")))
                 .await
@@ -477,7 +480,7 @@ pub async fn delete(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     Ok(())
 }
 
-async fn delete_impl(ctx: &Context, msg: &Message, mut args: Args) -> anyhow::Result<Vec<String>> {
+async fn delete_impl(ctx: &Context, mut args: Args) -> anyhow::Result<Vec<String>> {
     let storage = ctx
         .data
         .read()
@@ -490,13 +493,19 @@ async fn delete_impl(ctx: &Context, msg: &Message, mut args: Args) -> anyhow::Re
 
     for name in args.iter::<String>().flatten() {
         if let Some(file) = storage.read().get(name) {
-            if fs::remove_file(&file.path).is_ok() {
+            if fs::remove_file(&file.path).is_ok()
+                && client
+                    .object()
+                    .delete("surfpvparena", &format!("dist/sound/{}.mp3", file.name))
+                    .await
+                    .is_ok()
+            {
                 deleted.push(file.name.clone());
             }
         }
     }
 
-    // TODO: delete from gcs and update data.json
+    tokio::spawn(update_data_json(storage.read().dir.clone()));
 
     clean_cache_impl(ctx).await?;
 
@@ -504,7 +513,7 @@ async fn delete_impl(ctx: &Context, msg: &Message, mut args: Args) -> anyhow::Re
 }
 
 #[command]
-pub async fn shutdown(ctx: &Context, msg: &Message) -> CommandResult {
+pub async fn shutdown(_ctx: &Context, _msg: &Message) -> CommandResult {
     // TODO: Gracefully shutdown using channels
     std::process::exit(0);
 }
