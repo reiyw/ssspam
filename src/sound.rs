@@ -339,7 +339,7 @@ mod test {
 
     #[tokio::test]
     async fn test_watch_sound_storage() {
-        const DELAY: Duration = Duration::from_millis(100);
+        const DELAY: Duration = Duration::from_millis(500);
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_dir_path = temp_dir.path();
         let storage = Arc::new(RwLock::new(SoundStorage::load(&temp_dir)));
