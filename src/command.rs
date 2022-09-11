@@ -2,26 +2,25 @@ use std::{fs, path::PathBuf, str::FromStr};
 
 use anyhow::Context as _;
 use async_zip::read::mem::ZipFileReader;
+use chrono::{DateTime, Utc};
 use log::{info, warn};
+use prettytable::{format, Table};
 use serenity::{
     client::Context,
     framework::standard::{
-        macros::{check, command, group},
-        Args, CommandResult, Reason,
+        macros::{command, group},
+        Args, CommandResult,
     },
-    model::{channel::Message, id::UserId, prelude::VoiceState},
+    model::{channel::Message, prelude::VoiceState},
     prelude::Mentionable,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{
-    ChannelManager, GuildBroadcast, OpsMessage, SayCommand, SayCommands, SaySoundCache,
-    SoundStorage,
-};
+use crate::{ChannelManager, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache, SoundStorage};
 
 #[group]
 #[only_in(guilds)]
-#[commands(join, leave, mute, unmute, stop, clean_cache, r)]
+#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st)]
 struct General;
 
 #[command]
@@ -294,6 +293,56 @@ async fn r_impl(ctx: &Context, args: Args) -> anyhow::Result<SayCommands> {
     let file = storage.get_random().context("Has no sound file")?;
     let cmds = SayCommands::from_str(&format!("{} {}", file.name, args.rest()))?;
     Ok(cmds)
+}
+
+#[command]
+pub async fn s(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    if let Some(arg) = args.current() {
+        let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
+        let storage = storage.read();
+        let sims = storage.calc_similarities(arg);
+        let names: Vec<_> = sims
+            .iter()
+            .take(20)
+            .filter(|(s, _)| s > &0.85)
+            .map(|(_, f)| f.name.clone())
+            .collect();
+        let names: Vec<_> = if names.len() < 10 {
+            sims.iter().take(10).map(|(_, f)| f.name.clone()).collect()
+        } else {
+            names
+        };
+        msg.channel_id.say(&ctx.http, names.join(", ")).await.ok();
+    }
+    Ok(())
+}
+
+#[command]
+pub async fn st(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    if let Some(arg) = args.current() {
+        let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
+        let storage = storage.read();
+        let sims = storage.calc_similarities(arg);
+
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_CLEAN);
+        table.set_titles(row!["Name", "Dur", "Updated"]);
+
+        for (_, file) in sims.iter().take(10) {
+            let updated_at: DateTime<Utc> = file.updated_at().into();
+            table.add_row(row![
+                file.name,
+                format!("{:.1}", file.duration().as_secs_f64()),
+                updated_at.format("%Y-%m-%d") // updated_at.format("%Y-%m-%d %T")
+            ]);
+        }
+
+        msg.channel_id
+            .say(&ctx.http, format!("```\n{}\n```", table.to_string()))
+            .await
+            .ok();
+    }
+    Ok(())
 }
 
 #[group]
