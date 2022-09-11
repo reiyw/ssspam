@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, str::FromStr};
 
 use anyhow::Context as _;
 use async_zip::read::mem::ZipFileReader;
@@ -14,11 +14,14 @@ use serenity::{
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::{ChannelManager, GuildBroadcast, OpsMessage, SaySoundCache, SoundStorage};
+use crate::{
+    ChannelManager, GuildBroadcast, OpsMessage, SayCommand, SayCommands, SaySoundCache,
+    SoundStorage,
+};
 
 #[group]
 #[only_in(guilds)]
-#[commands(join, leave, mute, unmute, stop, clean_cache)]
+#[commands(join, leave, mute, unmute, stop, clean_cache, r)]
 struct General;
 
 #[command]
@@ -263,6 +266,34 @@ async fn clean_cache_impl(ctx: &Context) -> anyhow::Result<()> {
         .write()
         .clean();
     Ok(())
+}
+
+#[command]
+pub async fn r(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    match r_impl(ctx, args).await {
+        Ok(say_commands) => {
+            msg.channel_id
+                .say(&ctx.http, say_commands.to_string())
+                .await
+                .ok();
+        }
+        Err(e) => warn!("Failed r: {e:?}"),
+    }
+    Ok(())
+}
+
+async fn r_impl(ctx: &Context, args: Args) -> anyhow::Result<SayCommands> {
+    let storage = ctx
+        .data
+        .read()
+        .await
+        .get::<SoundStorage>()
+        .context("Could not get SoundStorage")?
+        .clone();
+    let storage = storage.read();
+    let file = storage.get_random().context("Has no sound file")?;
+    let cmds = SayCommands::from_str(&format!("{} {}", file.name, args.rest()))?;
+    Ok(cmds)
 }
 
 #[group]
