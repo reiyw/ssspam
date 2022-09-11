@@ -164,9 +164,10 @@ async fn process_say_commands(
             continue;
         }
 
-        if let Some(sound_file) = storage.read().get(&say_command.name) {
+        let sound_file = { storage.read().get(&say_command.name).cloned() };
+        if let Some(sound_file) = sound_file {
             let decoded =
-                match DecodedSaySound::from_command_and_file(&say_command, sound_file).await {
+                match DecodedSaySound::from_command_and_file(&say_command, &sound_file).await {
                     Ok(decoded) => decoded,
                     Err(e) => {
                         warn!("Error decoding: {e:?}");
@@ -188,7 +189,7 @@ pub async fn play_say_commands(
     ctx: &Context,
     guild_id: GuildId,
 ) -> anyhow::Result<()> {
-    let manager = songbird::get(&ctx)
+    let manager = songbird::get(ctx)
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();

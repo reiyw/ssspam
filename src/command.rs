@@ -301,19 +301,21 @@ async fn r_impl(ctx: &Context, args: Args) -> anyhow::Result<SayCommands> {
 #[command]
 pub async fn s(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     if let Some(arg) = args.current() {
-        let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
-        let storage = storage.read();
-        let sims = storage.calc_similarities(arg);
-        let names: Vec<_> = sims
-            .iter()
-            .take(20)
-            .filter(|(s, _)| s > &0.85)
-            .map(|(_, f)| f.name.clone())
-            .collect();
-        let names: Vec<_> = if names.len() < 10 {
-            sims.iter().take(10).map(|(_, f)| f.name.clone()).collect()
-        } else {
-            names
+        let names: Vec<_> = {
+            let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
+            let storage = storage.read();
+            let sims = storage.calc_similarities(arg);
+            let names: Vec<_> = sims
+                .iter()
+                .take(20)
+                .filter(|(s, _)| s > &0.85)
+                .map(|(_, f)| f.name.clone())
+                .collect();
+            if names.len() < 10 {
+                sims.iter().take(10).map(|(_, f)| f.name.clone()).collect()
+            } else {
+                names
+            }
         };
         msg.channel_id.say(&ctx.http, names.join(", ")).await.ok();
     }
@@ -323,25 +325,28 @@ pub async fn s(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[command]
 pub async fn st(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     if let Some(arg) = args.current() {
-        let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
-        let storage = storage.read();
-        let sims = storage.calc_similarities(arg);
-
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_CLEAN);
-        table.set_titles(row!["Name", "Dur", "Updated"]);
 
-        for (_, file) in sims.iter().take(10) {
-            let updated_at: DateTime<Utc> = file.updated_at().into();
-            table.add_row(row![
-                file.name,
-                format!("{:.1}", file.duration().as_secs_f64()),
-                updated_at.format("%Y-%m-%d") // updated_at.format("%Y-%m-%d %T")
-            ]);
+        {
+            let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
+            let storage = storage.read();
+            let sims = storage.calc_similarities(arg);
+
+            table.set_format(*format::consts::FORMAT_CLEAN);
+            table.set_titles(row!["Name", "Dur", "Updated"]);
+
+            for (_, file) in sims.iter().take(10) {
+                let updated_at: DateTime<Utc> = file.updated_at().into();
+                table.add_row(row![
+                    file.name,
+                    format!("{:.1}", file.duration().as_secs_f64()),
+                    updated_at.format("%Y-%m-%d") // updated_at.format("%Y-%m-%d %T")
+                ]);
+            }
         }
 
         msg.channel_id
-            .say(&ctx.http, format!("```\n{}\n```", table.to_string()))
+            .say(&ctx.http, format!("```\n{table}\n```"))
             .await
             .ok();
     }
@@ -492,7 +497,8 @@ async fn delete_impl(ctx: &Context, mut args: Args) -> anyhow::Result<Vec<String
     let mut deleted = Vec::new();
 
     for name in args.iter::<String>().flatten() {
-        if let Some(file) = storage.read().get(name) {
+        let sound_file = { storage.read().get(name).cloned() };
+        if let Some(file) = sound_file {
             if fs::remove_file(&file.path).is_ok()
                 && client
                     .object()

@@ -44,7 +44,7 @@ pub fn gen_data_json_from_sound_dir<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(())
 }
 
-// #[allow(clippy::future_not_send)]
+#[allow(clippy::future_not_send)]
 pub async fn update_data_json<P: AsRef<Path>>(sound_dir: P) -> anyhow::Result<()> {
     let temp_dir = tempdir()?;
     let out_file = temp_dir.path().join("data.json");

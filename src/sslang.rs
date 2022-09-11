@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt::Write, str::FromStr};
 
 use nom::{
     branch::alt,
@@ -50,19 +50,19 @@ impl ToString for SayCommand {
     fn to_string(&self) -> String {
         let mut s = self.name.clone();
         if self.speed != 100 {
-            s += &format!(" {}", self.speed);
+            write!(s, " {}", self.speed).unwrap();
         }
         if self.pitch != 100 {
-            s += &format!(" p{}", self.pitch);
+            write!(s, " p{}", self.pitch).unwrap();
         }
         if self.wait != 100 {
-            s += &format!(" w{:.1}", (self.wait as f64) / 1000.0);
+            write!(s, " w{:.1}", (self.wait as f64) / 1000.0).unwrap();
         }
         if self.start != 0 {
-            s += &format!(" s{:.1}", (self.start as f64) / 1000.0);
+            write!(s, " s{:.1}", (self.start as f64) / 1000.0).unwrap();
         }
         if let Some(dur) = self.duration {
-            s += &format!(" d{:.1}", (dur as f64) / 1000.0);
+            write!(s, " d{:.1}", (dur as f64) / 1000.0).unwrap();
         }
         if self.stop {
             s += " s";
@@ -110,9 +110,8 @@ impl SayCommands {
 }
 
 impl IntoIterator for SayCommands {
-    type Item = SayCommand;
-
     type IntoIter = std::vec::IntoIter<Self::Item>;
+    type Item = SayCommand;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()

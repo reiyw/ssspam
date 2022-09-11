@@ -116,7 +116,7 @@ impl SoundFile {
 
     fn load_unchecked(&self) -> Metadata {
         Metadata::load(&self.path)
-            .expect(&format!("Failed to load the metadata of {:?}", self.path))
+            .unwrap_or_else(|_| panic!("Failed to load the metadata of {:?}", self.path))
     }
 }
 
@@ -182,6 +182,10 @@ impl SoundStorage {
     pub fn len(&self) -> usize {
         self.sounds.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.sounds.is_empty()
+    }
 }
 
 pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
@@ -242,14 +246,11 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 ..
             } => match rename_mode {
                 RenameMode::Any | RenameMode::Other => {
+                    let mut storage = storage.write();
                     if let Ok(sound) = SoundFile::new_checked(&paths[0]) {
-                        let mut storage = storage.write();
                         storage.add(sound);
-                    } else {
-                        let mut storage = storage.write();
-                        if let Some(file_stem) = paths[0].file_stem() {
-                            storage.remove(file_stem.to_string_lossy());
-                        }
+                    } else if let Some(file_stem) = paths[0].file_stem() {
+                        storage.remove(file_stem.to_string_lossy());
                     }
                 }
                 RenameMode::From => {

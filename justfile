@@ -1,6 +1,6 @@
 lint:
   cargo clippy -- -D clippy::all -W clippy::nursery
-  cargo fmt -- --check
+  cargo +nightly fmt -- --check
   hadolint --ignore DL3059 --ignore DL3008 Dockerfile
 
 update-server:

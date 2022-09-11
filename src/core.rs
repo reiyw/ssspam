@@ -90,6 +90,12 @@ impl GuildBroadcast {
     }
 }
 
+impl Default for GuildBroadcast {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpsMessage {
     Stop,
