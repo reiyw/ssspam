@@ -18,7 +18,7 @@ use crate::{ChannelManager, GuildBroadcast, OpsMessage, SaySoundCache, SoundStor
 
 #[group]
 #[only_in(guilds)]
-#[commands(join, leave, mute, unmute, stop)]
+#[commands(join, leave, mute, unmute, stop, clean_cache)]
 struct General;
 
 #[command]
@@ -245,6 +245,26 @@ async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[command]
+pub async fn clean_cache(ctx: &Context, _msg: &Message) -> CommandResult {
+    if let Err(e) = clean_cache_impl(ctx).await {
+        warn!("Failed to clean cache: {e:?}");
+    }
+    Ok(())
+}
+
+async fn clean_cache_impl(ctx: &Context) -> anyhow::Result<()> {
+    ctx.data
+        .read()
+        .await
+        .get::<SaySoundCache>()
+        .context("Could not get SaySoundCache")?
+        .clone()
+        .write()
+        .clean();
+    Ok(())
+}
+
 #[group]
 #[owners_only]
 #[only_in(guilds)]
@@ -401,16 +421,4 @@ async fn delete_impl(ctx: &Context, msg: &Message, mut args: Args) -> anyhow::Re
     clean_cache_impl(ctx).await?;
 
     Ok(deleted)
-}
-
-async fn clean_cache_impl(ctx: &Context) -> anyhow::Result<()> {
-    ctx.data
-        .read()
-        .await
-        .get::<SaySoundCache>()
-        .context("Could not get SaySoundCache")?
-        .clone()
-        .write()
-        .clean();
-    Ok(())
 }
