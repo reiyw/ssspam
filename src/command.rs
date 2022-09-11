@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf, str::FromStr};
 use anyhow::Context as _;
 use async_zip::read::mem::ZipFileReader;
 use chrono::{DateTime, Utc};
-use log::{info, warn};
+use log::warn;
 use prettytable::{format, Table};
 use serenity::{
     client::Context,

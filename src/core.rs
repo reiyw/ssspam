@@ -1,16 +1,14 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use anyhow::Context as _;
-use log::{info, warn};
 use parking_lot::{Mutex, RwLock};
 use serenity::{
     client::Context,
-    framework::standard::{macros::command, CommandResult},
     model::{
         channel::Message,
-        id::{ChannelId, GuildId, UserId},
+        id::{ChannelId, GuildId},
     },
-    prelude::{GatewayIntents, Mentionable, TypeMapKey},
+    prelude::TypeMapKey,
 };
 use tokio::sync::{
     broadcast,
