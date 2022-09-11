@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use log::warn;
+use log::{warn, info};
 use serenity::{
     client::Context,
     framework::standard::{macros::command, CommandResult},
@@ -7,7 +7,7 @@ use serenity::{
     prelude::Mentionable,
 };
 
-use super::ChannelManager;
+use crate::{ChannelManager, GuildBroadcast, OpsMessage};
 
 #[command]
 #[only_in(guilds)]
@@ -105,9 +105,7 @@ pub async fn leave_based_on_voice_state_update(
                 .get::<ChannelManager>()
                 .context("Could not get ChannelManager")?
                 .clone();
-            let bots_voice_channel_id = channel_manager
-                .read()
-                .get_voice_channel_id(&guild_id);
+            let bots_voice_channel_id = channel_manager.read().get_voice_channel_id(&guild_id);
             let authors_old_state_voice_channel_id = old_state.channel_id;
             if bots_voice_channel_id != authors_old_state_voice_channel_id {
                 return Ok(());
@@ -196,6 +194,46 @@ async fn unmute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     let mut handler = handler_lock.lock().await;
 
     handler.mute(false).await?;
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+pub async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
+    if let Err(e) = stop_impl(ctx, msg).await {
+        warn!("Failed to stop: {e:?}");
+    }
+    Ok(())
+}
+
+async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
+    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
+
+    let manager = songbird::get(ctx)
+        .await
+        .context("Songbird Voice client placed in at initialization.")?
+        .clone();
+
+    let handler_lock = match manager.get(guild.id) {
+        Some(handler) => handler,
+        None => {
+            msg.reply(ctx, "Not in a voice channel").await?;
+            return Ok(());
+        }
+    };
+    let mut handler = handler_lock.lock().await;
+    handler.stop();
+
+    let guild_broadcast = ctx
+        .data
+        .read()
+        .await
+        .get::<GuildBroadcast>()
+        .context("Could not get GuildBroadcast")?
+        .clone();
+    let tx = guild_broadcast.lock().get_sender(guild.id);
+    tx.send(OpsMessage::Stop)?;
 
     Ok(())
 }

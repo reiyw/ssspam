@@ -1,35 +1,21 @@
-use std::{collections::HashMap, convert::TryInto, env, path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
 use dotenv::dotenv;
 use log::{info, warn};
-use once_cell::sync::{Lazy, OnceCell};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
-    client::{Client, ClientBuilder, Context, EventHandler},
-    framework::{
-        standard::{
-            macros::{command, group},
-            Args, CommandResult,
-        },
-        StandardFramework,
-    },
+    client::{Client, Context, EventHandler},
+    framework::{standard::macros::group, StandardFramework},
     model::{channel::Message, gateway::Ready, voice::VoiceState},
-    prelude::{GatewayIntents, Mentionable, TypeMapKey},
-    Result as SerenityResult,
+    prelude::GatewayIntents,
 };
-use songbird::{
-    driver::Bitrate,
-    input::{
-        cached::{Compressed, Memory},
-        Input, {self},
-    },
-    Call, Event, EventContext, EventHandler as VoiceEventHandler, SerenityInit, TrackEvent,
-};
+use songbird::SerenityInit;
 use ssspambot::{
     leave_based_on_voice_state_update, process_message, sound::watch_sound_storage, ChannelManager,
-    SaySoundCache, SoundStorage, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND, UNMUTE_COMMAND,
+    GuildBroadcast, SaySoundCache, SoundStorage, JOIN_COMMAND, LEAVE_COMMAND, MUTE_COMMAND,
+    STOP_COMMAND, UNMUTE_COMMAND,
 };
 
 struct Handler;
@@ -54,7 +40,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(join, leave, mute, unmute)]
+#[commands(join, leave, mute, unmute, stop)]
 struct General;
 
 #[derive(Parser)]
@@ -124,6 +110,8 @@ async fn main() -> anyhow::Result<()> {
             50,
             Duration::from_secs(60 * 10),
         ))));
+
+        data.insert::<GuildBroadcast>(Arc::new(Mutex::new(GuildBroadcast::new())));
     }
 
     let shard_manager = client.shard_manager.clone();

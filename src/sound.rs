@@ -8,6 +8,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use anyhow::Context as _;
 use counter::Counter;
 use glob::glob;
 use notify::{
@@ -80,7 +81,12 @@ impl SoundFile {
     /// Use this method if the input file is unreliable as sound data.
     fn new_checked<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
         Ok(Self {
-            name: path.as_ref().file_stem().unwrap().to_string_lossy().into(),
+            name: path
+                .as_ref()
+                .file_stem()
+                .context("No file name")?
+                .to_string_lossy()
+                .into(),
             path: path.as_ref().into(),
             metadata: Metadata::load(path.as_ref())?.into(),
         })
@@ -222,7 +228,9 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 ..
             } => {
                 let mut storage = storage.write();
-                storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
+                if let Some(file_stem) = paths[0].file_stem() {
+                    storage.remove(file_stem.to_string_lossy());
+                }
             }
             Event {
                 kind: EventKind::Modify(ModifyKind::Name(rename_mode)),
@@ -235,12 +243,16 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                         storage.add(sound);
                     } else {
                         let mut storage = storage.write();
-                        storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
+                        if let Some(file_stem) = paths[0].file_stem() {
+                            storage.remove(file_stem.to_string_lossy());
+                        }
                     }
                 }
                 RenameMode::From => {
                     let mut storage = storage.write();
-                    storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
+                    if let Some(file_stem) = paths[0].file_stem() {
+                        storage.remove(file_stem.to_string_lossy());
+                    }
                 }
                 RenameMode::To => {
                     if let Ok(sound) = SoundFile::new_checked(&paths[0]) {
@@ -250,7 +262,9 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 }
                 RenameMode::Both => {
                     let mut storage = storage.write();
-                    storage.remove(paths[0].file_stem().unwrap().to_string_lossy());
+                    if let Some(file_stem) = paths[0].file_stem() {
+                        storage.remove(file_stem.to_string_lossy());
+                    }
                     if let Ok(sound) = SoundFile::new_checked(&paths[1]) {
                         storage.add(sound);
                     }

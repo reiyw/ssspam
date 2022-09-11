@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use anyhow::Context as _;
 use log::{info, warn};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serenity::{
     client::Context,
     framework::standard::{macros::command, CommandResult},
@@ -12,8 +12,12 @@ use serenity::{
     },
     prelude::{GatewayIntents, Mentionable, TypeMapKey},
 };
+use tokio::sync::{
+    broadcast,
+    broadcast::{Receiver, Sender},
+};
 
-use super::{play_say_commands, SayCommands};
+use crate::{play_say_commands, SayCommands};
 
 /// Keeps track of channels where the bot joining.
 #[derive(Debug, Clone, Default)]
@@ -52,6 +56,51 @@ impl TypeMapKey for ChannelManager {
     type Value = Arc<RwLock<Self>>;
 }
 
+#[derive(Debug)]
+pub struct GuildBroadcast {
+    // Holds Receiver to keep the channel open.
+    channels: HashMap<GuildId, (Sender<OpsMessage>, Receiver<OpsMessage>)>,
+}
+
+impl GuildBroadcast {
+    pub fn new() -> Self {
+        Self {
+            channels: HashMap::new(),
+        }
+    }
+
+    pub fn subscribe(&mut self, guild_id: GuildId) -> Receiver<OpsMessage> {
+        match self.channels.get(&guild_id) {
+            Some((tx, _)) => tx.subscribe(),
+            None => {
+                let (tx, rx1) = broadcast::channel(16);
+                self.channels.insert(guild_id, (tx.clone(), rx1));
+                tx.subscribe()
+            }
+        }
+    }
+
+    pub fn get_sender(&mut self, guild_id: GuildId) -> Sender<OpsMessage> {
+        match self.channels.get(&guild_id) {
+            Some((tx, _)) => tx.clone(),
+            None => {
+                let (tx, rx1) = broadcast::channel(16);
+                self.channels.insert(guild_id, (tx.clone(), rx1));
+                tx
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpsMessage {
+    Stop,
+}
+
+impl TypeMapKey for GuildBroadcast {
+    type Value = Arc<Mutex<Self>>;
+}
+
 pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
 
@@ -85,5 +134,23 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
         saycmds
     };
 
-    play_say_commands(saycmds, ctx, guild.id).await
+    let guild_broadcast = ctx
+        .data
+        .read()
+        .await
+        .get::<GuildBroadcast>()
+        .context("Could not get GuildBroadcast")?
+        .clone();
+    let mut rx = guild_broadcast.lock().subscribe(guild.id);
+
+    tokio::select! {
+        res = play_say_commands(saycmds, ctx, guild.id) => res,
+        _ = async move {
+            while let Ok(msg) = rx.recv().await {
+                if msg == OpsMessage::Stop {
+                    break;
+                }
+            }
+        } => Ok(())
+    }
 }
