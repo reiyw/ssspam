@@ -20,7 +20,7 @@ static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone)]
 pub struct SaySoundCache {
-    cache: Cache<SayCommand, DecodedSaySound>,
+    cache: Cache<SayCommand, Arc<DecodedSaySound>>,
 }
 
 impl SaySoundCache {
@@ -33,11 +33,11 @@ impl SaySoundCache {
         }
     }
 
-    fn get(&self, say_command: &SayCommand) -> Option<DecodedSaySound> {
+    fn get(&self, say_command: &SayCommand) -> Option<Arc<DecodedSaySound>> {
         self.cache.get(say_command)
     }
 
-    fn insert(&mut self, say_command: SayCommand, say_sound: DecodedSaySound) {
+    fn insert(&mut self, say_command: SayCommand, say_sound: Arc<DecodedSaySound>) {
         self.cache.insert(say_command, say_sound);
     }
 
@@ -52,7 +52,6 @@ impl TypeMapKey for SaySoundCache {
 
 #[derive(Debug, Clone)]
 struct DecodedSaySound {
-    // TODO: need Arc?
     decoded_data: Memory,
 
     /// Duration to block until next say sound is played.
@@ -141,7 +140,7 @@ async fn decode(
 async fn process_say_commands(
     say_commands: SayCommands,
     ctx: &Context,
-) -> anyhow::Result<Vec<DecodedSaySound>> {
+) -> anyhow::Result<Vec<Arc<DecodedSaySound>>> {
     let cache = ctx
         .data
         .read()
@@ -174,8 +173,8 @@ async fn process_say_commands(
                         continue;
                     }
                 };
-            // TODO: don't want to clone this...
-            cache.write().insert(say_command, decoded.clone());
+            let decoded = Arc::new(decoded);
+            cache.write().insert(say_command, Arc::clone(&decoded));
 
             decoded_sounds.push(decoded);
         }
@@ -235,7 +234,7 @@ pub async fn play_say_commands(
 }
 
 async fn send_tracks(
-    decoded_sounds: Vec<DecodedSaySound>,
+    decoded_sounds: Vec<Arc<DecodedSaySound>>,
     handler_lock: Arc<Mutex<Call>>,
     track_handles: &mut Vec<TrackHandle>,
     estimated_duration: &mut Duration,
@@ -251,8 +250,9 @@ async fn send_tracks(
         // Triggers decrementing `num_playing_sounds`
         {
             let num_playing_sounds = num_playing_sounds.clone();
+            let playing_duration = decoded_sound.playing_duration;
             tokio::spawn(async move {
-                tokio::time::sleep(decoded_sound.playing_duration).await;
+                tokio::time::sleep(playing_duration).await;
                 let num_playing_sounds = num_playing_sounds.clone();
                 let mut num_playing_sounds = num_playing_sounds.lock().await;
                 *num_playing_sounds -= 1;
