@@ -41,7 +41,7 @@ impl EventHandler for Handler {
 #[derive(Parser)]
 #[clap(version, about)]
 struct Opt {
-    #[clap(long, env)]
+    #[clap(long, env, default_value_t = String::from("~"))]
     command_prefix: String,
 
     #[clap(long, env)]
