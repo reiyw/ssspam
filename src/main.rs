@@ -42,6 +42,9 @@ impl EventHandler for Handler {
 #[clap(version, about)]
 struct Opt {
     #[clap(long, env)]
+    command_prefix: String,
+
+    #[clap(long, env)]
     discord_token: String,
 
     #[clap(long, env, value_parser)]
@@ -77,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
 
     let framework = StandardFramework::new()
         .configure(|c| {
-            c.prefix("-").owners(HashSet::from([
+            c.prefix(opt.command_prefix).owners(HashSet::from([
                 // TODO: Use Discord's team feature
                 UserId(310620137608970240), // auzen
                 UserId(342903795380125698), // nicotti
