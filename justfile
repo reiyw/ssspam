@@ -1,3 +1,11 @@
+set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
+
+build-pi $TARGET_AR="arm-none-linux-gnueabihf-ar.exe" $TARGET_CC="arm-none-linux-gnueabihf-gcc.exe" $LIBOPUS_NO_PKG="":
+  cargo build --target armv7-unknown-linux-musleabihf --release -v
+
+deploy: build-pi
+  scp target/armv7-unknown-linux-musleabihf/release/ssspambot pi:/home/pi/local/bin/
+
 lint:
   cargo clippy -- -D clippy::all -W clippy::nursery
   cargo +nightly fmt -- --check
