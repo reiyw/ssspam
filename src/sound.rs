@@ -213,12 +213,9 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
         info!("Event in the sound directory: {event:?}");
         match event {
             Event {
-                kind: EventKind::Create(CreateKind::File),
-                paths,
-                ..
-            }
-            | Event {
-                kind: EventKind::Modify(ModifyKind::Data(_)),
+                kind:
+                    EventKind::Create(CreateKind::File | CreateKind::Any)
+                    | EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Any),
                 paths,
                 ..
             } => match SoundFile::new_checked(&paths[0]) {
@@ -339,7 +336,7 @@ mod test {
 
     #[tokio::test]
     async fn test_watch_sound_storage() {
-        const DELAY: Duration = Duration::from_millis(500);
+        const DELAY: Duration = Duration::from_millis(100);
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_dir_path = temp_dir.path();
         let storage = Arc::new(RwLock::new(SoundStorage::load(&temp_dir)));
