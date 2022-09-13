@@ -1,7 +1,8 @@
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{collections::HashMap, fs, path::PathBuf, str::FromStr, sync::Arc};
 
 use anyhow::Context as _;
 use parking_lot::{Mutex, RwLock};
+use serde::{Deserialize, Serialize};
 use serenity::{
     client::Context,
     model::{
@@ -15,10 +16,10 @@ use tokio::sync::{
     broadcast::{Receiver, Sender},
 };
 
-use crate::{play_say_commands, SayCommands};
+use crate::{play_say_commands, SayCommands, CONFIG_DIR};
 
 /// Keeps track of channels where the bot joining.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ChannelManager {
     /// The value is the tuple of the following:
     /// - ID of the voice channel where the bot joining and
@@ -27,18 +28,44 @@ pub struct ChannelManager {
 }
 
 impl ChannelManager {
+    #[inline]
+    fn config_file() -> PathBuf {
+        CONFIG_DIR.join("channel_state.json")
+    }
+
+    pub fn load_or_new() -> Self {
+        if let Ok(j) = fs::read_to_string(Self::config_file()) {
+            eprintln!("loaded from config file");
+            serde_json::from_str(&j).expect("Should parse JSON file")
+        } else {
+            Self::default()
+        }
+    }
+
+    fn save(&self) -> anyhow::Result<()> {
+        let j = serde_json::to_string(self)?;
+        dbg!(&j, Self::config_file());
+        fs::write(Self::config_file(), j)?;
+        Ok(())
+    }
+
     pub fn join(
         &mut self,
         guild_id: GuildId,
         voice_channel_id: ChannelId,
         text_channel_id: ChannelId,
     ) -> Option<(ChannelId, ChannelId)> {
-        self.channels
-            .insert(guild_id, (voice_channel_id, text_channel_id))
+        let ret = self
+            .channels
+            .insert(guild_id, (voice_channel_id, text_channel_id));
+        self.save().ok();
+        ret
     }
 
     pub fn leave(&mut self, guild_id: &GuildId) -> Option<(ChannelId, ChannelId)> {
-        self.channels.remove(guild_id)
+        let ret = self.channels.remove(guild_id);
+        self.save().ok();
+        ret
     }
 
     pub fn get_voice_channel_id(&self, guild_id: &GuildId) -> Option<ChannelId> {

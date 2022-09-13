@@ -8,7 +8,12 @@ use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
     framework::StandardFramework,
-    model::{channel::Message, gateway::Ready, id::UserId, voice::VoiceState},
+    model::{
+        channel::Message,
+        gateway::Ready,
+        id::{GuildId, UserId},
+        voice::VoiceState,
+    },
     prelude::GatewayIntents,
 };
 use songbird::SerenityInit;
@@ -23,6 +28,24 @@ struct Handler;
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
         info!("{} is connected!", ready.user.name);
+    }
+
+    async fn cache_ready(&self, ctx: Context, guilds: Vec<GuildId>) {
+        let manager = songbird::get(&ctx).await.unwrap().clone();
+        let channel_manager = ctx
+            .data
+            .read()
+            .await
+            .get::<ChannelManager>()
+            .unwrap()
+            .clone();
+        for guild_id in guilds {
+            let voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
+            if let Some(voice_channel_id) = voice_channel_id {
+                let (_, res) = manager.join(guild_id, voice_channel_id).await;
+                res.ok();
+            }
+        }
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
@@ -105,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(watch_sound_storage(Arc::clone(&storage)));
         data.insert::<SoundStorage>(storage);
 
-        data.insert::<ChannelManager>(Arc::new(RwLock::new(ChannelManager::default())));
+        data.insert::<ChannelManager>(Arc::new(RwLock::new(ChannelManager::load_or_new())));
 
         data.insert::<SaySoundCache>(Arc::new(RwLock::new(SaySoundCache::new(
             50,
