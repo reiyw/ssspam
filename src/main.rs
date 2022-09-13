@@ -98,10 +98,6 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Error while creating client");
 
-    // let storage = Arc::new(RwLock::new(SoundStorage::load(&opt.sound_dir)));
-    // tokio::spawn(watch_sound_storage(Arc::clone(&storage)));
-    // SOUND_STORAGE.set(storage);
-
     {
         let mut data = client.data.write().await;
 
