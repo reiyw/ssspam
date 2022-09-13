@@ -19,7 +19,8 @@ use serenity::{
 use songbird::SerenityInit;
 use ssspambot::{
     leave_voice_channel, process_message, sound::watch_sound_storage, ChannelManager,
-    GuildBroadcast, NumPlayingSounds, SaySoundCache, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
+    GuildBroadcast, NumPlayingSounds, SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP,
+    OWNER_GROUP,
 };
 
 struct Handler;
@@ -123,6 +124,7 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Error while creating client");
 
+    let shutdown_receiver;
     {
         let mut data = client.data.write().await;
 
@@ -140,14 +142,20 @@ async fn main() -> anyhow::Result<()> {
         data.insert::<GuildBroadcast>(Arc::new(Mutex::new(GuildBroadcast::new())));
 
         data.insert::<NumPlayingSounds>(Arc::new(Mutex::new(NumPlayingSounds::new())));
+
+        let (rx, channel) = ShutdownChannel::new();
+        data.insert::<ShutdownChannel>(channel);
+        shutdown_receiver = rx;
     }
 
     let shard_manager = client.shard_manager.clone();
 
+    #[allow(clippy::redundant_pub_crate)]
     tokio::spawn(async move {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("Could not register ctrl+c handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {},
+            _ = shutdown_receiver => {},
+        }
         shard_manager.lock().await.shutdown_all().await;
     });
 

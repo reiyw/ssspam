@@ -12,9 +12,12 @@ use serenity::{
         Args, CommandResult,
     },
     model::{channel::Message, id::GuildId},
-    prelude::Mentionable,
+    prelude::{Mentionable, TypeMapKey},
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::oneshot::{self, Receiver, Sender},
+};
 
 use crate::{
     web::update_data_json, ChannelManager, GuildBroadcast, NumPlayingSounds, OpsMessage,
@@ -515,8 +518,28 @@ async fn delete_impl(ctx: &Context, mut args: Args) -> anyhow::Result<Vec<String
     Ok(deleted)
 }
 
+pub struct ShutdownChannel {
+    tx: Sender<()>,
+}
+
+impl ShutdownChannel {
+    pub fn new() -> (Receiver<()>, Self) {
+        let (tx, rx) = oneshot::channel();
+        (rx, Self { tx })
+    }
+
+    fn send_shutdown(self) {
+        self.tx.send(()).unwrap();
+    }
+}
+
+impl TypeMapKey for ShutdownChannel {
+    type Value = Self;
+}
+
 #[command]
-pub async fn shutdown(_ctx: &Context, _msg: &Message) -> CommandResult {
-    // TODO: Gracefully shutdown using channels
-    std::process::exit(0);
+pub async fn shutdown(ctx: &Context, _msg: &Message) -> CommandResult {
+    let channel = ctx.data.write().await.remove::<ShutdownChannel>().unwrap();
+    channel.send_shutdown();
+    Ok(())
 }
