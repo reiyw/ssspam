@@ -23,6 +23,8 @@ jobs:
         include:
           - target: armv7-unknown-linux-gnueabihf
             os: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
