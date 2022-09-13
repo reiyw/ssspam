@@ -391,7 +391,7 @@ async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
         let content = attachment.download().await?;
 
         if attachment.filename.ends_with(".zip") {
-            let mut zip = ZipFileReader::new(&content[..]).await?;
+            let mut zip = ZipFileReader::new(&content).await?;
             for i in 0..zip.entries().len() {
                 let reader = zip.entry_reader(i).await?;
                 let entry = reader.entry();
