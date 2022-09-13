@@ -135,7 +135,7 @@ pub async fn leave_based_on_voice_state_update(
                     .members(&ctx.cache)
                     .await
                     .context("Should get members")?;
-                if members.len() == 1 && members[0].user.bot {
+                if members.iter().all(|m| m.user.bot) {
                     let manager = songbird::get(&ctx)
                         .await
                         .context("Songbird Voice client placed in at initialization.")?
