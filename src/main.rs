@@ -18,7 +18,7 @@ use serenity::{
 };
 use songbird::SerenityInit;
 use ssspambot::{
-    leave_based_on_voice_state_update, process_message, sound::watch_sound_storage, ChannelManager,
+    leave_voice_channel, process_message, sound::watch_sound_storage, ChannelManager,
     GuildBroadcast, SaySoundCache, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
 };
 
@@ -54,9 +54,11 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, _new: VoiceState) {
-        if let Err(e) = leave_based_on_voice_state_update(ctx, old).await {
-            warn!("Error while deciding whether to leave: {e:?}");
+    async fn voice_state_update(&self, ctx: Context, _old: Option<VoiceState>, new: VoiceState) {
+        if let Some(guild_id) = new.guild_id {
+            if let Err(e) = leave_voice_channel(ctx, guild_id).await {
+                warn!("Error while deciding whether to leave: {e:?}");
+            }
         }
     }
 }

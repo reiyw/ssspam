@@ -35,7 +35,6 @@ impl ChannelManager {
 
     pub fn load_or_new() -> Self {
         if let Ok(j) = fs::read_to_string(Self::config_file()) {
-            eprintln!("loaded from config file");
             serde_json::from_str(&j).expect("Should parse JSON file")
         } else {
             Self::default()
@@ -44,7 +43,6 @@ impl ChannelManager {
 
     fn save(&self) -> anyhow::Result<()> {
         let j = serde_json::to_string(self)?;
-        dbg!(&j, Self::config_file());
         fs::write(Self::config_file(), j)?;
         Ok(())
     }
