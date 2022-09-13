@@ -19,7 +19,7 @@ use serenity::{
 use songbird::SerenityInit;
 use ssspambot::{
     leave_voice_channel, process_message, sound::watch_sound_storage, ChannelManager,
-    GuildBroadcast, SaySoundCache, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
+    GuildBroadcast, NumPlayingSounds, SaySoundCache, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
 };
 
 struct Handler;
@@ -138,6 +138,8 @@ async fn main() -> anyhow::Result<()> {
         ))));
 
         data.insert::<GuildBroadcast>(Arc::new(Mutex::new(GuildBroadcast::new())));
+
+        data.insert::<NumPlayingSounds>(Arc::new(Mutex::new(NumPlayingSounds::new())));
     }
 
     let shard_manager = client.shard_manager.clone();

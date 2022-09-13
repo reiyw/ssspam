@@ -17,8 +17,8 @@ use serenity::{
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{
-    web::update_data_json, ChannelManager, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache,
-    SoundStorage,
+    web::update_data_json, ChannelManager, GuildBroadcast, NumPlayingSounds, OpsMessage,
+    SayCommands, SaySoundCache, SoundStorage,
 };
 
 #[group]
@@ -235,6 +235,14 @@ async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         .clone();
     let tx = guild_broadcast.lock().get_sender(guild.id);
     tx.send(OpsMessage::Stop)?;
+
+    ctx.data
+        .read()
+        .await
+        .get::<NumPlayingSounds>()
+        .unwrap()
+        .lock()
+        .reset(guild.id);
 
     Ok(())
 }

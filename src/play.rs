@@ -1,4 +1,12 @@
-use std::{cmp, sync::Arc, time::Duration};
+use std::{
+    cmp,
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicI8, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use anyhow::Context as _;
 use log::warn;
@@ -91,6 +99,50 @@ impl DecodedSaySound {
             playing_duration,
         })
     }
+}
+
+#[derive(Debug)]
+pub struct NumPlayingSounds {
+    counts: HashMap<GuildId, AtomicI8>,
+}
+
+impl NumPlayingSounds {
+    pub fn new() -> Self {
+        Self {
+            counts: HashMap::new(),
+        }
+    }
+
+    fn get(&mut self, guild_id: GuildId) -> &AtomicI8 {
+        self.counts
+            .entry(guild_id)
+            .or_insert_with(|| AtomicI8::new(0))
+    }
+
+    fn increment(&mut self, guild_id: GuildId) {
+        let num = self.get(guild_id);
+        num.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn decrement(&mut self, guild_id: GuildId) {
+        let num = self.get(guild_id);
+        num.fetch_add(-1, Ordering::SeqCst);
+    }
+
+    pub fn reset(&mut self, guild_id: GuildId) {
+        let num = self.get(guild_id);
+        num.store(0, Ordering::SeqCst);
+    }
+}
+
+impl Default for NumPlayingSounds {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TypeMapKey for NumPlayingSounds {
+    type Value = Arc<parking_lot::Mutex<Self>>;
 }
 
 async fn decode(
@@ -204,6 +256,8 @@ pub async fn play_say_commands(
     let mut elapsed = Duration::from_secs(0);
     let timeout_result = {
         let task = send_tracks(
+            ctx,
+            guild_id,
             decoded_sounds,
             handler_lock,
             &mut track_handles,
@@ -227,6 +281,13 @@ pub async fn play_say_commands(
             for track_handle in track_handles.iter() {
                 track_handle.stop().ok();
             }
+            ctx.data
+                .read()
+                .await
+                .get::<NumPlayingSounds>()
+                .unwrap()
+                .lock()
+                .reset(guild_id);
         }
     }
 
@@ -234,36 +295,50 @@ pub async fn play_say_commands(
 }
 
 async fn send_tracks(
+    ctx: &Context,
+    guild_id: GuildId,
     decoded_sounds: Vec<Arc<DecodedSaySound>>,
     handler_lock: Arc<Mutex<Call>>,
     track_handles: &mut Vec<TrackHandle>,
     estimated_duration: &mut Duration,
     elapsed: &mut Duration,
 ) -> anyhow::Result<()> {
-    let num_playing_sounds = Arc::new(Mutex::new(0));
+    let num_playing_sounds = ctx
+        .data
+        .read()
+        .await
+        .get::<NumPlayingSounds>()
+        .unwrap()
+        .clone();
     for decoded_sound in decoded_sounds {
         *estimated_duration = cmp::max(
             *estimated_duration,
             *elapsed + decoded_sound.playing_duration,
         );
 
+        {
+            let num_playing_sounds = Arc::clone(&num_playing_sounds);
+            num_playing_sounds.lock().increment(guild_id);
+        }
+
         // Triggers decrementing `num_playing_sounds`
         {
-            let num_playing_sounds = num_playing_sounds.clone();
+            let num_playing_sounds = Arc::clone(&num_playing_sounds);
             let playing_duration = decoded_sound.playing_duration;
             tokio::spawn(async move {
                 tokio::time::sleep(playing_duration).await;
-                let num_playing_sounds = num_playing_sounds.clone();
-                let mut num_playing_sounds = num_playing_sounds.lock().await;
-                *num_playing_sounds -= 1;
+                num_playing_sounds.lock().decrement(guild_id);
             });
         }
 
         let volume_multiplier = {
-            let mut num_playing_sounds = num_playing_sounds.lock().await;
-            *num_playing_sounds += 1;
-            if *num_playing_sounds > 2 {
-                1.0 / (*num_playing_sounds as f64)
+            let num_playing_sounds = Arc::clone(&num_playing_sounds);
+            let num = num_playing_sounds
+                .lock()
+                .get(guild_id)
+                .load(Ordering::SeqCst);
+            if num > 2 {
+                1.0 / ((num - 1) as f64)
             } else {
                 1.0
             }
