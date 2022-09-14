@@ -20,8 +20,8 @@ use tokio::{
 };
 
 use crate::{
-    web::update_data_json, ChannelManager, GuildBroadcast, NumPlayingSounds, OpsMessage,
-    SayCommands, SaySoundCache, SoundStorage,
+    web::update_data_json, ChannelManager, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache,
+    SoundStorage, VolumeManager,
 };
 
 #[group]
@@ -242,7 +242,7 @@ async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     ctx.data
         .read()
         .await
-        .get::<NumPlayingSounds>()
+        .get::<VolumeManager>()
         .unwrap()
         .lock()
         .reset(guild.id);

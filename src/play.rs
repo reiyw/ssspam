@@ -2,7 +2,7 @@ use std::{
     cmp,
     collections::HashMap,
     sync::{
-        atomic::{AtomicI8, Ordering},
+        atomic::{AtomicI16, Ordering},
         Arc,
     },
     time::Duration,
@@ -23,7 +23,6 @@ use tokio::sync::Mutex;
 
 use crate::{sslang::Action, SayCommand, SayCommands, SoundFile, SoundStorage};
 
-const VOLUME: f64 = 0.05;
 static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone)]
@@ -102,46 +101,57 @@ impl DecodedSaySound {
 }
 
 #[derive(Debug)]
-pub struct NumPlayingSounds {
-    counts: HashMap<GuildId, AtomicI8>,
+pub struct VolumeManager {
+    capacities: HashMap<GuildId, AtomicI16>,
 }
 
-impl NumPlayingSounds {
+impl VolumeManager {
+    const BASE_VOLUME: f64 = 0.05;
+    const MAX_ASSIGNMENT: i16 = 200;
+    const MAX_CAPACITY: i16 = 600;
+
     pub fn new() -> Self {
         Self {
-            counts: HashMap::new(),
+            capacities: HashMap::new(),
         }
     }
 
-    fn get(&mut self, guild_id: GuildId) -> &AtomicI8 {
-        self.counts
+    fn get_volume_and_assignment(&mut self, guild_id: GuildId) -> (f32, i16) {
+        let capacity = self.get_capacity(guild_id);
+        let assignment = cmp::min(Self::MAX_ASSIGNMENT, capacity.load(Ordering::SeqCst) / 2);
+
+        capacity.fetch_sub(assignment, Ordering::SeqCst);
+
+        (
+            (Self::BASE_VOLUME * ((assignment as f64) / (Self::MAX_ASSIGNMENT as f64))) as f32,
+            assignment,
+        )
+    }
+
+    fn return_assignment(&mut self, assignment: i16, guild_id: GuildId) {
+        let capacity = self.get_capacity(guild_id);
+        capacity.fetch_add(assignment, Ordering::SeqCst);
+    }
+
+    fn get_capacity(&mut self, guild_id: GuildId) -> &AtomicI16 {
+        self.capacities
             .entry(guild_id)
-            .or_insert_with(|| AtomicI8::new(0))
-    }
-
-    fn increment(&mut self, guild_id: GuildId) {
-        let num = self.get(guild_id);
-        num.fetch_add(1, Ordering::SeqCst);
-    }
-
-    fn decrement(&mut self, guild_id: GuildId) {
-        let num = self.get(guild_id);
-        num.fetch_add(-1, Ordering::SeqCst);
+            .or_insert_with(|| AtomicI16::new(Self::MAX_CAPACITY))
     }
 
     pub fn reset(&mut self, guild_id: GuildId) {
-        let num = self.get(guild_id);
-        num.store(0, Ordering::SeqCst);
+        let capacity = self.get_capacity(guild_id);
+        capacity.store(Self::MAX_CAPACITY, Ordering::SeqCst);
     }
 }
 
-impl Default for NumPlayingSounds {
+impl Default for VolumeManager {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TypeMapKey for NumPlayingSounds {
+impl TypeMapKey for VolumeManager {
     type Value = Arc<parking_lot::Mutex<Self>>;
 }
 
@@ -284,7 +294,7 @@ pub async fn play_say_commands(
             ctx.data
                 .read()
                 .await
-                .get::<NumPlayingSounds>()
+                .get::<VolumeManager>()
                 .unwrap()
                 .lock()
                 .reset(guild_id);
@@ -303,11 +313,11 @@ async fn send_tracks(
     estimated_duration: &mut Duration,
     elapsed: &mut Duration,
 ) -> anyhow::Result<()> {
-    let num_playing_sounds = ctx
+    let volume_manager = ctx
         .data
         .read()
         .await
-        .get::<NumPlayingSounds>()
+        .get::<VolumeManager>()
         .unwrap()
         .clone();
     for decoded_sound in decoded_sounds {
@@ -316,40 +326,21 @@ async fn send_tracks(
             *elapsed + decoded_sound.playing_duration,
         );
 
-        {
-            let num_playing_sounds = Arc::clone(&num_playing_sounds);
-            num_playing_sounds.lock().increment(guild_id);
-        }
+        let (volume, assignment) = volume_manager.lock().get_volume_and_assignment(guild_id);
 
-        // Triggers decrementing `num_playing_sounds`
         {
-            let num_playing_sounds = Arc::clone(&num_playing_sounds);
-            let playing_duration = decoded_sound.playing_duration;
+            let volume_manager = Arc::clone(&volume_manager);
+            let playing_duration = Arc::clone(&decoded_sound).playing_duration;
             tokio::spawn(async move {
                 tokio::time::sleep(playing_duration).await;
-                num_playing_sounds.lock().decrement(guild_id);
+                volume_manager
+                    .lock()
+                    .return_assignment(assignment, guild_id);
             });
         }
 
-        let volume_multiplier = {
-            let num_playing_sounds = Arc::clone(&num_playing_sounds);
-            let num = num_playing_sounds
-                .lock()
-                .get(guild_id)
-                .load(Ordering::SeqCst);
-            if num > 2 {
-                1.0 / ((num - 1) as f64)
-            } else {
-                1.0
-            }
-        };
-
-        let track_handle = play_sound(
-            &decoded_sound.decoded_data,
-            handler_lock.clone(),
-            volume_multiplier,
-        )
-        .await;
+        let track_handle =
+            play_sound(&decoded_sound.decoded_data, handler_lock.clone(), volume).await;
 
         *elapsed += decoded_sound.blocking_duration;
         tokio::time::sleep(decoded_sound.blocking_duration).await;
@@ -359,14 +350,10 @@ async fn send_tracks(
     Ok(())
 }
 
-pub async fn play_sound(
-    mem: &Memory,
-    handler_lock: Arc<Mutex<Call>>,
-    volume_multiplier: f64,
-) -> TrackHandle {
+pub async fn play_sound(mem: &Memory, handler_lock: Arc<Mutex<Call>>, volume: f32) -> TrackHandle {
     let _ = mem.raw.spawn_loader();
     let (mut audio, audio_handle) = create_player(mem.new_handle().try_into().unwrap());
-    audio.set_volume((VOLUME * volume_multiplier) as f32);
+    audio.set_volume(volume);
     let mut handler = handler_lock.lock().await;
     handler.play(audio);
     audio_handle

@@ -19,7 +19,7 @@ use serenity::{
 use songbird::SerenityInit;
 use ssspambot::{
     leave_voice_channel, process_message, sound::watch_sound_storage, ChannelManager,
-    GuildBroadcast, NumPlayingSounds, SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP,
+    GuildBroadcast, SaySoundCache, ShutdownChannel, SoundStorage, VolumeManager, GENERAL_GROUP,
     OWNER_GROUP,
 };
 
@@ -141,7 +141,7 @@ async fn main() -> anyhow::Result<()> {
 
         data.insert::<GuildBroadcast>(Arc::new(Mutex::new(GuildBroadcast::new())));
 
-        data.insert::<NumPlayingSounds>(Arc::new(Mutex::new(NumPlayingSounds::new())));
+        data.insert::<VolumeManager>(Arc::new(Mutex::new(VolumeManager::new())));
 
         let (rx, channel) = ShutdownChannel::new();
         data.insert::<ShutdownChannel>(channel);
