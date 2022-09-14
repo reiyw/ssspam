@@ -351,7 +351,6 @@ async fn send_tracks(
 }
 
 pub async fn play_sound(mem: &Memory, handler_lock: Arc<Mutex<Call>>, volume: f32) -> TrackHandle {
-    let _ = mem.raw.spawn_loader();
     let (mut audio, audio_handle) = create_player(mem.new_handle().try_into().unwrap());
     audio.set_volume(volume);
     let mut handler = handler_lock.lock().await;
