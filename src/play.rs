@@ -84,6 +84,10 @@ impl DecodedSaySound {
             if command.stop {
                 dur = cmp::min(dur, command.wait as i64);
             }
+
+            // Capped at 60 secs during encoding.
+            dur = cmp::min(dur, 60 * 1000);
+
             Duration::from_millis(dur as u64)
         };
 
@@ -190,6 +194,8 @@ async fn decode(
                 "48000",
                 "-acodec",
                 "pcm_f32le",
+                "-t",
+                "60",
                 "-af",
                 &audio_filters.join(","),
                 "-",
