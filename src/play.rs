@@ -110,7 +110,7 @@ pub struct VolumeManager {
 }
 
 impl VolumeManager {
-    const BASE_VOLUME: f64 = 0.05;
+    const BASE_VOLUME: f64 = 0.25;
     const MAX_ASSIGNMENT: i16 = 200;
     const MAX_CAPACITY: i16 = 600;
 
@@ -172,6 +172,7 @@ async fn decode(
             format!("asetrate={}", asetrate),
             format!("atempo={}", atempo),
             format!("aresample={}", file.sample_rate_hz()),
+            "loudnorm".to_string(),
         ]
     };
 
