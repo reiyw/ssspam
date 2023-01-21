@@ -91,10 +91,10 @@ fn main() -> anyhow::Result<()> {
         }
     };
 
-    let mut f = File::create(&opt.dest.join("index.html"))?;
+    let mut f = File::create(opt.dest.join("index.html"))?;
     f.write_all(markup.into_string().as_bytes())?;
 
-    gen_data_json_from_sound_dir(&opt.sound_dir, &opt.dest.join("data.json"))?;
+    gen_data_json_from_sound_dir(&opt.sound_dir, opt.dest.join("data.json"))?;
 
     Ok(())
 }

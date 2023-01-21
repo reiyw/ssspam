@@ -34,11 +34,10 @@ impl ChannelManager {
     }
 
     pub fn load_or_new() -> Self {
-        if let Ok(j) = fs::read_to_string(Self::config_file()) {
-            serde_json::from_str(&j).expect("Should parse JSON file")
-        } else {
-            Self::default()
-        }
+        fs::read_to_string(Self::config_file()).map_or_else(
+            |_| Self::default(),
+            |j| serde_json::from_str(&j).expect("Should parse JSON file"),
+        )
     }
 
     fn save(&self) -> anyhow::Result<()> {

@@ -134,7 +134,7 @@ impl SoundStorage {
         for path in
             (glob(&format!("{}/**/*.mp3", dir.as_ref().to_string_lossy())).unwrap()).flatten()
         {
-            let sound = SoundFile::new_unchecked(&path);
+            let sound = SoundFile::new_unchecked(path);
             sounds.insert(sound.name.to_lowercase(), sound);
         }
         Self {
