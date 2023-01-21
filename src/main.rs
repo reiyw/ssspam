@@ -1,7 +1,7 @@
 use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
