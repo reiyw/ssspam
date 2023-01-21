@@ -6,7 +6,7 @@ default-run = "ssspambot"
 
 [dependencies]
 anyhow = "1.0.64"
-async_zip = "=0.0.6"
+async_zip = "0.0.11"
 chrono = "0.4.22"
 clap = { version = "3.2.20", features = ["derive", "env"] }
 clap-verbosity-flag = "1.0.1"

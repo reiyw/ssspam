@@ -391,21 +391,21 @@ async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
         let content = attachment.download().await?;
 
         if attachment.filename.ends_with(".zip") {
-            let mut zip = ZipFileReader::new(&content).await?;
-            for i in 0..zip.entries().len() {
-                let reader = zip.entry_reader(i).await?;
-                let entry = reader.entry();
+            let reader = ZipFileReader::new(content).await?;
+            for i in 0..reader.file().entries().len() {
+                let entry = reader.file().entries().get(i).unwrap().entry();
+                let mut entry_reader = reader.entry(i).await?;
 
-                if entry.dir() || !entry.name().ends_with(".mp3") {
+                if entry.dir() || !entry.filename().ends_with(".mp3") {
                     continue;
                 }
 
                 let out_path = storage
                     .read()
                     .dir
-                    .join(PathBuf::from(entry.name()).file_name().unwrap());
-                let mut output = tokio::fs::File::create(&out_path).await?;
-                reader.copy_to_end_crc(&mut output, 65536).await?;
+                    .join(PathBuf::from(entry.filename()).file_name().unwrap());
+                let mut writer = tokio::fs::File::create(&out_path).await?;
+                tokio::io::copy(&mut entry_reader, &mut writer).await?;
                 count += 1;
 
                 let mut file = tokio::fs::File::open(&out_path).await?;
