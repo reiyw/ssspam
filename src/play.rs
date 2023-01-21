@@ -9,7 +9,6 @@ use std::{
 };
 
 use anyhow::Context as _;
-use log::warn;
 use moka::sync::Cache;
 use parking_lot::RwLock;
 use serenity::{client::Context, model::id::GuildId, prelude::TypeMapKey};
@@ -20,6 +19,7 @@ use songbird::{
     Call,
 };
 use tokio::sync::Mutex;
+use tracing::warn;
 
 use crate::{sslang::Action, SayCommand, SayCommands, SoundFile, SoundStorage};
 

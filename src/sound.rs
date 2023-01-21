@@ -10,7 +10,6 @@ use std::{
 use anyhow::Context as _;
 use counter::Counter;
 use glob::glob;
-use log::{info, warn};
 use notify::{
     event::{CreateKind, ModifyKind, RenameMode},
     Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
@@ -20,6 +19,7 @@ use parking_lot::RwLock;
 use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 use serenity::prelude::TypeMapKey;
 use tokio::{runtime::Handle, sync::mpsc};
+use tracing::{info, warn};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Metadata {

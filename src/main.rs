@@ -2,7 +2,6 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
 use dotenv::dotenv;
-use log::{info, warn};
 use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
@@ -22,6 +21,7 @@ use ssspambot::{
     GuildBroadcast, SaySoundCache, ShutdownChannel, SoundStorage, VolumeManager, GENERAL_GROUP,
     OWNER_GROUP,
 };
+use tracing::{info, warn};
 
 struct Handler;
 
@@ -84,25 +84,9 @@ struct Opt {
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
-    let opt = Opt::parse();
+    tracing_subscriber::fmt::init();
 
-    fern::Dispatch::new()
-        .format(|out, message, record| {
-            out.finish(format_args!(
-                "{}[{}][{}] {}",
-                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
-                record.target(),
-                record.level(),
-                message
-            ))
-        })
-        .level(opt.verbose.log_level_filter())
-        .level_for("tracing", log::LevelFilter::Warn)
-        .level_for("serenity", log::LevelFilter::Warn)
-        .level_for("songbird", log::LevelFilter::Warn)
-        .level_for("rustls", log::LevelFilter::Warn)
-        .chain(std::io::stderr())
-        .apply()?;
+    let opt = Opt::parse();
 
     let framework = StandardFramework::new()
         .configure(|c| {
