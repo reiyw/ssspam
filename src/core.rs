@@ -16,7 +16,7 @@ use tokio::sync::{
     broadcast::{Receiver, Sender},
 };
 
-use crate::{play_say_commands, SayCommands, CONFIG_DIR};
+use crate::{play_say_commands, SayCommands};
 
 /// Keeps track of channels where the bot joining.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -25,24 +25,24 @@ pub struct ChannelManager {
     /// - ID of the voice channel where the bot joining and
     /// - ID of the text channel where the join command invoked
     channels: HashMap<GuildId, (ChannelId, ChannelId)>,
+
+    config_file: PathBuf,
 }
 
 impl ChannelManager {
-    #[inline]
-    fn config_file() -> PathBuf {
-        CONFIG_DIR.join("channel_state.json")
-    }
-
-    pub fn load_or_new() -> Self {
-        fs::read_to_string(Self::config_file()).map_or_else(
-            |_| Self::default(),
+    pub fn load_or_new(config_file: PathBuf) -> Self {
+        fs::read_to_string(&config_file).map_or_else(
+            |_| Self {
+                config_file,
+                ..Default::default()
+            },
             |j| serde_json::from_str(&j).expect("Should parse JSON file"),
         )
     }
 
     fn save(&self) -> anyhow::Result<()> {
         let j = serde_json::to_string(self)?;
-        fs::write(Self::config_file(), j)?;
+        fs::write(&self.config_file, j)?;
         Ok(())
     }
 

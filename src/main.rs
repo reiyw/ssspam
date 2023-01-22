@@ -76,6 +76,9 @@ struct Opt {
     #[clap(long, env, value_parser)]
     sound_dir: PathBuf,
 
+    #[clap(long, env, value_parser)]
+    config_dir: PathBuf,
+
     #[clap(flatten)]
     verbose: clap_verbosity_flag::Verbosity,
 }
@@ -116,7 +119,9 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(watch_sound_storage(Arc::clone(&storage)));
         data.insert::<SoundStorage>(storage);
 
-        data.insert::<ChannelManager>(Arc::new(RwLock::new(ChannelManager::load_or_new())));
+        data.insert::<ChannelManager>(Arc::new(RwLock::new(ChannelManager::load_or_new(
+            opt.config_dir.join("channel_state.json"),
+        ))));
 
         data.insert::<SaySoundCache>(Arc::new(RwLock::new(SaySoundCache::new(
             50,
