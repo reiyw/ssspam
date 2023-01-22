@@ -1,6 +1,9 @@
 name: Docker build and push
 
-on: workflow_dispatch
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   docker:
