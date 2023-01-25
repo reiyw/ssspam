@@ -1,12 +1,4 @@
-use std::{
-    cmp,
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicI16, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{cmp, sync::Arc, time::Duration};
 
 use anyhow::Context as _;
 use moka::sync::Cache;
@@ -24,6 +16,7 @@ use tracing::warn;
 use crate::{sslang::Action, SayCommand, SayCommands, SoundFile, SoundStorage};
 
 static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(60);
+static VOLUME: f32 = 0.05;
 
 #[derive(Debug, Clone)]
 pub struct SaySoundCache {
@@ -102,61 +95,6 @@ impl DecodedSaySound {
             playing_duration,
         })
     }
-}
-
-#[derive(Debug)]
-pub struct VolumeManager {
-    capacities: HashMap<GuildId, AtomicI16>,
-}
-
-impl VolumeManager {
-    const BASE_VOLUME: f64 = 0.05;
-    const MAX_ASSIGNMENT: i16 = 200;
-    const MAX_CAPACITY: i16 = 600;
-
-    pub fn new() -> Self {
-        Self {
-            capacities: HashMap::new(),
-        }
-    }
-
-    fn get_volume_and_assignment(&mut self, guild_id: GuildId) -> (f32, i16) {
-        let capacity = self.get_capacity(guild_id);
-        let assignment = cmp::min(Self::MAX_ASSIGNMENT, capacity.load(Ordering::SeqCst) / 2);
-
-        capacity.fetch_sub(assignment, Ordering::SeqCst);
-
-        (
-            (Self::BASE_VOLUME * ((assignment as f64) / (Self::MAX_ASSIGNMENT as f64))) as f32,
-            assignment,
-        )
-    }
-
-    fn return_assignment(&mut self, assignment: i16, guild_id: GuildId) {
-        let capacity = self.get_capacity(guild_id);
-        capacity.fetch_add(assignment, Ordering::SeqCst);
-    }
-
-    fn get_capacity(&mut self, guild_id: GuildId) -> &AtomicI16 {
-        self.capacities
-            .entry(guild_id)
-            .or_insert_with(|| AtomicI16::new(Self::MAX_CAPACITY))
-    }
-
-    pub fn reset(&mut self, guild_id: GuildId) {
-        let capacity = self.get_capacity(guild_id);
-        capacity.store(Self::MAX_CAPACITY, Ordering::SeqCst);
-    }
-}
-
-impl Default for VolumeManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TypeMapKey for VolumeManager {
-    type Value = Arc<parking_lot::Mutex<Self>>;
 }
 
 async fn decode(
@@ -272,8 +210,6 @@ pub async fn play_say_commands(
     let mut elapsed = Duration::from_secs(0);
     let timeout_result = {
         let task = send_tracks(
-            ctx,
-            guild_id,
             decoded_sounds,
             handler_lock,
             &mut track_handles,
@@ -297,13 +233,6 @@ pub async fn play_say_commands(
             for track_handle in track_handles.iter() {
                 track_handle.stop().ok();
             }
-            ctx.data
-                .read()
-                .await
-                .get::<VolumeManager>()
-                .unwrap()
-                .lock()
-                .reset(guild_id);
         }
     }
 
@@ -311,42 +240,20 @@ pub async fn play_say_commands(
 }
 
 async fn send_tracks(
-    ctx: &Context,
-    guild_id: GuildId,
     decoded_sounds: Vec<Arc<DecodedSaySound>>,
     handler_lock: Arc<Mutex<Call>>,
     track_handles: &mut Vec<TrackHandle>,
     estimated_duration: &mut Duration,
     elapsed: &mut Duration,
 ) -> anyhow::Result<()> {
-    let volume_manager = ctx
-        .data
-        .read()
-        .await
-        .get::<VolumeManager>()
-        .unwrap()
-        .clone();
     for decoded_sound in decoded_sounds {
         *estimated_duration = cmp::max(
             *estimated_duration,
             *elapsed + decoded_sound.playing_duration,
         );
 
-        let (volume, assignment) = volume_manager.lock().get_volume_and_assignment(guild_id);
-
-        {
-            let volume_manager = Arc::clone(&volume_manager);
-            let playing_duration = Arc::clone(&decoded_sound).playing_duration;
-            tokio::spawn(async move {
-                tokio::time::sleep(playing_duration).await;
-                volume_manager
-                    .lock()
-                    .return_assignment(assignment, guild_id);
-            });
-        }
-
         let track_handle =
-            play_sound(&decoded_sound.decoded_data, handler_lock.clone(), volume).await;
+            play_sound(&decoded_sound.decoded_data, handler_lock.clone(), VOLUME).await;
 
         *elapsed += decoded_sound.blocking_duration;
         tokio::time::sleep(decoded_sound.blocking_duration).await;

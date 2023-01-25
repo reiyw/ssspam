@@ -28,7 +28,7 @@ rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
 serenity = { version = "0.11.5", features = ["cache", "framework", "standard_framework", "voice"] }
-songbird = "0.3.0"
+songbird = { git = "https://github.com/reiyw/songbird", branch = "hard-clip" }
 strsim = "0.10.0"
 tempfile = "3.3.0"
 tokio = { version = "1.21.0", features = ["macros", "rt-multi-thread", "signal"] }

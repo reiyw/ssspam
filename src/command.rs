@@ -21,7 +21,7 @@ use tracing::warn;
 
 use crate::{
     web::update_data_json, ChannelManager, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache,
-    SoundStorage, VolumeManager,
+    SoundStorage,
 };
 
 #[group]
@@ -238,14 +238,6 @@ async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         .clone();
     let tx = guild_broadcast.lock().get_sender(guild.id);
     tx.send(OpsMessage::Stop)?;
-
-    ctx.data
-        .read()
-        .await
-        .get::<VolumeManager>()
-        .unwrap()
-        .lock()
-        .reset(guild.id);
 
     Ok(())
 }
