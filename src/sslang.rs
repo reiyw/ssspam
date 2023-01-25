@@ -37,7 +37,7 @@ impl Default for SayCommand {
             name: "".into(),
             speed: 100,
             pitch: 100,
-            wait: 100,
+            wait: 0,
             start: 0,
             duration: None,
             stop: false,
@@ -55,7 +55,7 @@ impl ToString for SayCommand {
         if self.pitch != 100 {
             write!(s, " p{}", self.pitch).unwrap();
         }
-        if self.wait != 100 {
+        if self.wait != 0 {
             write!(s, " w{:.1}", (self.wait as f64) / 1000.0).unwrap();
         }
         if self.start != 0 {
@@ -88,24 +88,10 @@ impl SayCommands {
     }
 
     pub fn sanitize(&mut self) {
-        let mut cmds = Vec::new();
-        let mut consecutive_immediate_sounds = 1;
         for cmd in self.0.iter_mut() {
             cmd.pitch = std::cmp::max(cmd.pitch, 1);
             cmd.pitch = std::cmp::min(cmd.pitch, 200);
-
-            if consecutive_immediate_sounds > 2 {
-                continue;
-            }
-
-            if cmd.wait < 100 {
-                consecutive_immediate_sounds += 1
-            } else {
-                consecutive_immediate_sounds = 1;
-            }
-            cmds.push(cmd.clone());
         }
-        self.0 = cmds;
     }
 }
 
