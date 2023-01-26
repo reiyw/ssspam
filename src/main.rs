@@ -15,7 +15,7 @@ use serenity::{
     },
     prelude::GatewayIntents,
 };
-use songbird::SerenityInit;
+use songbird::{self, SerenityInit, Songbird};
 use ssspambot::{
     leave_voice_channel, process_message, sound::watch_sound_storage, ChannelManager,
     GuildBroadcast, SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
@@ -103,10 +103,18 @@ async fn main() -> anyhow::Result<()> {
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
+    let voice = Songbird::serenity();
+    {
+        let config = voice.config.read().clone();
+        if let Some(config) = config {
+            let config = config.clip_threshold(0.01);
+            voice.set_config(config.clone());
+        }
+    }
     let mut client = Client::builder(&opt.discord_token, intents)
         .event_handler(Handler)
         .framework(framework)
-        .register_songbird()
+        .register_songbird_with(voice)
         .await
         .expect("Error while creating client");
 
