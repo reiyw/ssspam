@@ -26,7 +26,7 @@ use crate::{
 
 #[group]
 #[only_in(guilds)]
-#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st, config)]
+#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st)]
 struct General;
 
 #[command]
@@ -348,7 +348,7 @@ pub async fn st(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[group]
 #[owners_only]
 #[only_in(guilds)]
-#[commands(upload, delete, shutdown)]
+#[commands(upload, delete, shutdown, config)]
 struct Owner;
 
 #[command]
