@@ -1450,6 +1450,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
 
 [[package]]
+name = "pickledb"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c53a5ade47760e8cc4986bdc5e72daeffaaaee64cbc374f9cfe0a00c1cd87b1f"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2047,7 +2057,7 @@ dependencies = [
 [[package]]
 name = "songbird"
 version = "0.3.0"
-source = "git+https://github.com/reiyw/songbird?branch=hard-clip#c8e96f2dcf6094ee3e14a2349bcd1aaa9cd53752"
+source = "git+https://github.com/reiyw/songbird?branch=hard-clip#a8dcfa9efd6454f13bcd9479f060993da295ee6e"
 dependencies = [
  "async-trait",
  "async-tungstenite",
@@ -2113,6 +2123,7 @@ dependencies = [
  "notify",
  "once_cell",
  "parking_lot",
+ "pickledb",
  "prettytable-rs",
  "rand",
  "serde",

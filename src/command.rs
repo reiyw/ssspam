@@ -20,13 +20,13 @@ use tokio::{
 use tracing::warn;
 
 use crate::{
-    web::update_data_json, ChannelManager, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache,
-    SoundStorage,
+    web::update_data_json, ChannelManager, Configs, GuildBroadcast, OpsMessage, SayCommands,
+    SaySoundCache, SoundStorage,
 };
 
 #[group]
 #[only_in(guilds)]
-#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st)]
+#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st, config)]
 struct General;
 
 #[command]
@@ -533,5 +533,60 @@ impl TypeMapKey for ShutdownChannel {
 pub async fn shutdown(ctx: &Context, _msg: &Message) -> CommandResult {
     let channel = ctx.data.write().await.remove::<ShutdownChannel>().unwrap();
     channel.send_shutdown();
+    Ok(())
+}
+
+#[command]
+pub async fn config(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    match config_impl(ctx, msg, args).await {
+        Ok(()) => {}
+        Err(e) => {
+            msg.channel_id
+                .say(&ctx.http, format!("Error: {e}"))
+                .await
+                .ok();
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::single_match)]
+async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result<()> {
+    let configs = ctx
+        .data
+        .read()
+        .await
+        .get::<Configs>()
+        .context("Could not get Configs")?
+        .clone();
+    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
+    match args.clone().current() {
+        Some(sub_cmd) if sub_cmd == "set" => match args.clone().advance().current() {
+            Some(key) => match args.clone().advance().advance().current() {
+                Some(value) => {
+                    {
+                        let mut configs = configs.write();
+                        configs.set(&guild.id, key, value)?;
+                    }
+
+                    let manager = songbird::get(ctx).await.unwrap();
+                    let configs = configs.read();
+                    {
+                        let config = manager.config.read().clone();
+                        if let Some(config) = config {
+                            let config = config.clip_threshold(configs.get_clip_threshold());
+                            manager.set_config(config);
+                        }
+                    }
+                }
+                None => {}
+            },
+            None => {}
+        },
+        Some(sub_cmd) if sub_cmd == "list" => {}
+        Some(_sub_cmd) => {}
+        None => {}
+    }
+
     Ok(())
 }

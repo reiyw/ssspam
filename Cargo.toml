@@ -23,12 +23,14 @@ nom = "7.1.1"
 notify = { version = "5.0.0", default-features = false, features = ["macos_kqueue"] }
 once_cell = "1.14.0"
 parking_lot = "0.12.1"
+pickledb = "0.5.1"
 prettytable-rs = "0.9.0"
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
 serenity = { version = "0.11.5", features = ["cache", "framework", "standard_framework", "voice"] }
 songbird = { git = "https://github.com/reiyw/songbird", branch = "hard-clip" }
+# songbird = { path = "../songbird" }
 strsim = "0.10.0"
 tempfile = "3.3.0"
 tokio = { version = "1.21.0", features = ["macros", "rt-multi-thread", "signal"] }

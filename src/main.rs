@@ -17,7 +17,7 @@ use serenity::{
 };
 use songbird::{self, SerenityInit, Songbird};
 use ssspambot::{
-    leave_voice_channel, process_message, sound::watch_sound_storage, ChannelManager,
+    leave_voice_channel, process_message, sound::watch_sound_storage, ChannelManager, Configs,
     GuildBroadcast, SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
 };
 use tracing::{info, warn};
@@ -103,12 +103,14 @@ async fn main() -> anyhow::Result<()> {
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
+    let configs = Configs::load_or_create(opt.config_dir.join("config.json"))?;
+
     let voice = Songbird::serenity();
     {
         let config = voice.config.read().clone();
         if let Some(config) = config {
-            let config = config.clip_threshold(0.01);
-            voice.set_config(config.clone());
+            let config = config.clip_threshold(configs.get_clip_threshold());
+            voice.set_config(config);
         }
     }
     let mut client = Client::builder(&opt.discord_token, intents)
@@ -140,6 +142,8 @@ async fn main() -> anyhow::Result<()> {
         let (rx, channel) = ShutdownChannel::new();
         data.insert::<ShutdownChannel>(channel);
         shutdown_receiver = rx;
+
+        data.insert::<Configs>(Arc::new(RwLock::new(configs)));
     }
 
     let shard_manager = client.shard_manager.clone();
