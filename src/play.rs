@@ -107,8 +107,8 @@ async fn decode(
         let asetrate = file.sample_rate_hz() as f64 * speed_multiplier * pitch_multiplier;
         let atempo = 1.0 / pitch_multiplier;
         [
-            format!("asetrate={}", asetrate),
-            format!("atempo={}", atempo),
+            format!("asetrate={asetrate}"),
+            format!("atempo={atempo}"),
             format!("aresample={}", file.sample_rate_hz()),
         ]
     };
