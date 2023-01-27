@@ -13,6 +13,7 @@ use serenity::{
     model::{channel::Message, id::GuildId},
     prelude::{Mentionable, TypeMapKey},
 };
+use systemstat::{Platform, System};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::oneshot::{self, Receiver, Sender},
@@ -26,7 +27,7 @@ use crate::{
 
 #[group]
 #[only_in(guilds)]
-#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st)]
+#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st, uptime)]
 struct General;
 
 #[command]
@@ -342,6 +343,20 @@ pub async fn st(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             .await
             .ok();
     }
+    Ok(())
+}
+
+#[command]
+#[only_in(guilds)]
+async fn uptime(ctx: &Context, msg: &Message) -> CommandResult {
+    let sys = System::new();
+    msg.channel_id
+        .say(
+            &ctx.http,
+            humantime::format_duration(sys.uptime().unwrap()).to_string(),
+        )
+        .await
+        .ok();
     Ok(())
 }
 

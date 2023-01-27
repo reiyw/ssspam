@@ -32,6 +32,7 @@ serenity = { version = "0.11.5", features = ["cache", "framework", "standard_fra
 songbird = { git = "https://github.com/reiyw/songbird", branch = "hard-clip" }
 # songbird = { path = "../songbird" }
 strsim = "0.10.0"
+systemstat = "0.2.3"
 tempfile = "3.3.0"
 tokio = { version = "1.21.0", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.37"
