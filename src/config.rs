@@ -39,9 +39,20 @@ impl Configs {
             .context("Failed to set clip_threshold")
     }
 
+    pub fn get_sharpness(&self) -> f32 {
+        self.db.get::<f32>("global.sharpness").unwrap_or(250.0)
+    }
+
+    pub fn set_sharpness(&mut self, value: &str) -> anyhow::Result<()> {
+        self.db
+            .set("global.sharpness", &value.parse::<f32>()?)
+            .context("Failed to set sharpness")
+    }
+
     pub fn set(&mut self, _guild_id: &GuildId, key: &str, value: &str) -> anyhow::Result<()> {
         match key {
             "clip_threshold" => self.set_clip_threshold(value),
+            "sharpness" => self.set_sharpness(value),
             _ => bail!("Unrecognized key"),
         }
     }

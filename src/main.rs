@@ -110,6 +110,7 @@ async fn main() -> anyhow::Result<()> {
         let config = voice.config.read().clone();
         if let Some(config) = config {
             let config = config.clip_threshold(configs.get_clip_threshold());
+            let config = config.sharpness(configs.get_sharpness());
             voice.set_config(config);
         }
     }

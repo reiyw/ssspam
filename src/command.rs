@@ -575,6 +575,7 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
                         let config = manager.config.read().clone();
                         if let Some(config) = config {
                             let config = config.clip_threshold(configs.get_clip_threshold());
+                            let config = config.sharpness(configs.get_sharpness());
                             manager.set_config(config);
                         }
                     }
