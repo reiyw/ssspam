@@ -70,7 +70,7 @@ impl ToString for SayCommand {
             s += " s";
         }
         if let Some(ref af) = self.audio_filter {
-            write!(s, "af={af}").unwrap();
+            write!(s, " af={af}").unwrap();
         }
         match self.action {
             Action::Synthesize => s += "; ",
