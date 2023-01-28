@@ -7,7 +7,7 @@ deploy: build-pi
   scp target/armv7-unknown-linux-musleabihf/release/ssspambot pi:/home/pi/local/bin/
 
 lint:
-  cargo clippy -- -D clippy::all -W clippy::nursery
+  cargo +nightly clippy -- -D clippy::all -W clippy::nursery
   cargo +nightly fmt -- --check
   hadolint --ignore DL3059 --ignore DL3008 Dockerfile
 
