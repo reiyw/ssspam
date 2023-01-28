@@ -2,7 +2,7 @@ use std::{fmt::Write, str::FromStr};
 
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_while1},
+    bytes::complete::{tag, take_till, take_while1},
     character::complete::{char, multispace0, u32},
     combinator::{eof, map, opt},
     error::{Error, ParseError},
@@ -29,6 +29,7 @@ pub struct SayCommand {
     pub duration: Option<u32>,
     pub stop: bool,
     pub action: Action,
+    pub audio_filter: Option<String>,
 }
 
 impl Default for SayCommand {
@@ -42,6 +43,7 @@ impl Default for SayCommand {
             duration: None,
             stop: false,
             action: Action::Synthesize,
+            audio_filter: None,
         }
     }
 }
@@ -70,6 +72,9 @@ impl ToString for SayCommand {
         match self.action {
             Action::Synthesize => s += "; ",
             Action::Concat => s += "| ",
+        }
+        if let Some(ref af) = self.audio_filter {
+            write!(s, "af={af}").unwrap();
         }
         s
     }
@@ -133,6 +138,7 @@ enum SayArg {
     Start(u32),
     Duration(u32),
     Stop,
+    AudioFilter(String),
 }
 
 fn speed(i: &str) -> IResult<&str, u32> {
@@ -163,6 +169,10 @@ fn action(i: &str) -> IResult<&str, &str> {
     ws(alt((tag(";"), tag("|"), eof)))(i)
 }
 
+fn audio_filter(i: &str) -> IResult<&str, &str> {
+    ws(preceded(tag("af="), take_till(|c| c == ';' || c == ' ')))(i)
+}
+
 fn say_arg(input: &str) -> IResult<&str, SayArg> {
     alt((
         map(speed, SayArg::Speed),
@@ -171,6 +181,7 @@ fn say_arg(input: &str) -> IResult<&str, SayArg> {
         map(start, |n| SayArg::Start((n * 1000.0) as u32)),
         map(duration, |n| SayArg::Duration((n * 1000.0) as u32)),
         map(stop, |_| SayArg::Stop),
+        map(audio_filter, |af| SayArg::AudioFilter(af.to_owned())),
     ))(input)
 }
 
@@ -203,6 +214,7 @@ fn say_command(input: &str) -> IResult<&str, SayCommand> {
             SayArg::Start(n) => saycmd.start = n,
             SayArg::Duration(n) => saycmd.duration = Some(n),
             SayArg::Stop => saycmd.stop = true,
+            SayArg::AudioFilter(af) => saycmd.audio_filter = Some(af),
         }
     }
 
@@ -493,6 +505,34 @@ mod test {
             ])
             .to_string(),
             "a| b| c".to_string()
+        );
+    }
+
+    #[test]
+    fn test_audio_filter() {
+        assert_eq!(
+            SayCommands::from_str("a af=aecho=0.8:0.88:60:0.4").unwrap(),
+            SayCommands(vec![SayCommandBuilder::default()
+                .name("a".to_owned())
+                .audio_filter(Some("aecho=0.8:0.88:60:0.4".to_owned()))
+                .build()
+                .unwrap()])
+        );
+
+        assert_eq!(
+            SayCommands::from_str("a af=aecho=0.8:0.9:1000|1800:0.3|0.25 | b").unwrap(),
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_owned())
+                    .audio_filter(Some("aecho=0.8:0.9:1000|1800:0.3|0.25".to_owned()))
+                    .action(Action::Concat)
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("b".to_owned())
+                    .build()
+                    .unwrap(),
+            ])
         );
     }
 }

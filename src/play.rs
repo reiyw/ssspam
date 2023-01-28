@@ -106,11 +106,15 @@ async fn decode(
         let pitch_multiplier = command.pitch as f64 / 100.0;
         let asetrate = file.sample_rate_hz() as f64 * speed_multiplier * pitch_multiplier;
         let atempo = 1.0 / pitch_multiplier;
-        [
+        let mut afs = vec![
             format!("asetrate={asetrate}"),
             format!("atempo={atempo}"),
             format!("aresample={}", file.sample_rate_hz()),
-        ]
+        ];
+        if let Some(af) = command.audio_filter.clone() {
+            afs.push(af);
+        }
+        afs
     };
 
     let t_opt_value = match command.duration {
