@@ -69,12 +69,12 @@ impl ToString for SayCommand {
         if self.stop {
             s += " s";
         }
+        if let Some(ref af) = self.audio_filter {
+            write!(s, "af={af}").unwrap();
+        }
         match self.action {
             Action::Synthesize => s += "; ",
             Action::Concat => s += "| ",
-        }
-        if let Some(ref af) = self.audio_filter {
-            write!(s, "af={af}").unwrap();
         }
         s
     }
