@@ -2063,7 +2063,7 @@ dependencies = [
 [[package]]
 name = "songbird"
 version = "0.3.0"
-source = "git+https://github.com/reiyw/songbird?branch=hard-clip#24bca24e492c4e7e72bda57cd38edf93329f8673"
+source = "git+https://github.com/reiyw/songbird?branch=hard-clip#49aef7a3add0bd6ea6130178c6ced9bd600cd10b"
 dependencies = [
  "async-trait",
  "async-tungstenite",
