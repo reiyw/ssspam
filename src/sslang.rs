@@ -131,6 +131,12 @@ impl ToString for SayCommands {
     }
 }
 
+impl From<Vec<SayCommand>> for SayCommands {
+    fn from(value: Vec<SayCommand>) -> Self {
+        Self(value)
+    }
+}
+
 enum SayArg {
     Speed(u32),
     Pitch(u32),

@@ -2,6 +2,7 @@ pub mod command;
 pub mod config;
 pub mod core;
 pub mod play;
+pub mod scripting;
 pub mod sound;
 pub mod sslang;
 pub mod web;
@@ -16,6 +17,7 @@ pub use crate::{
     config::Configs,
     core::{process_message, ChannelManager, GuildBroadcast, OpsMessage},
     play::{play_say_commands, SaySoundCache},
+    scripting::interpret_rhai,
     sound::{SoundFile, SoundStorage},
-    sslang::{SayCommand, SayCommands},
+    sslang::{SayCommand, SayCommandBuilder, SayCommands},
 };

@@ -26,6 +26,7 @@ parking_lot = "0.12.1"
 pickledb = "0.5.1"
 prettytable-rs = "0.9.0"
 rand = "0.8.5"
+rhai = "1.12.0"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
 serenity = { version = "0.11.5", features = ["cache", "framework", "standard_framework", "voice"] }

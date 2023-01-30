@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, str::FromStr};
+use std::{fs, path::PathBuf, str::FromStr, time::Duration};
 
 use anyhow::Context as _;
 use async_zip::read::mem::ZipFileReader;
@@ -21,13 +21,13 @@ use tokio::{
 use tracing::warn;
 
 use crate::{
-    web::update_data_json, ChannelManager, Configs, GuildBroadcast, OpsMessage, SayCommands,
-    SaySoundCache, SoundStorage,
+    interpret_rhai, web::update_data_json, ChannelManager, Configs, GuildBroadcast, OpsMessage,
+    SayCommands, SaySoundCache, SoundStorage,
 };
 
 #[group]
 #[only_in(guilds)]
-#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st, uptime)]
+#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st, uptime, rhai)]
 struct General;
 
 #[command]
@@ -357,6 +357,29 @@ async fn uptime(ctx: &Context, msg: &Message) -> CommandResult {
         )
         .await
         .ok();
+    Ok(())
+}
+
+#[command]
+pub async fn rhai(ctx: &Context, msg: &Message) -> CommandResult {
+    // let source = args.rest().trim().trim_matches('`').to_owned();
+    let source = msg.content[6..].to_owned();
+    dbg!(&source);
+    let task = tokio::task::spawn_blocking(move || interpret_rhai(&source));
+    match tokio::time::timeout(Duration::from_secs(1), task).await {
+        Ok(Ok(Ok(say_commands))) => {
+            msg.channel_id.say(&ctx.http, say_commands).await.ok();
+        }
+        Err(e) => {
+            msg.channel_id.say(&ctx.http, e.to_string()).await.ok();
+        }
+        Ok(Err(e)) => {
+            msg.channel_id.say(&ctx.http, e.to_string()).await.ok();
+        }
+        Ok(Ok(Err(e))) => {
+            msg.channel_id.say(&ctx.http, e.to_string()).await.ok();
+        }
+    }
     Ok(())
 }
 
