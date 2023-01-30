@@ -362,8 +362,7 @@ async fn uptime(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 pub async fn rhai(ctx: &Context, msg: &Message) -> CommandResult {
-    // let source = args.rest().trim().trim_matches('`').to_owned();
-    let source = msg.content[6..].to_owned();
+    let source = msg.content[6..].trim().trim_matches('`').to_owned();
     dbg!(&source);
     let task = tokio::task::spawn_blocking(move || interpret_rhai(&source));
     match tokio::time::timeout(Duration::from_secs(1), task).await {
