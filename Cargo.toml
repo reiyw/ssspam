@@ -8,7 +8,7 @@ default-run = "ssspambot"
 anyhow = "1.0.64"
 async_zip = { version = "0.0.11", features = ["deflate"] }
 chrono = "0.4.22"
-clap = { version = "3.2.20", features = ["derive", "env"] }
+clap = { version = "4.1.4", features = ["derive", "env"] }
 clap-verbosity-flag = "1.0.1"
 cloud-storage = { version = "0.11.1", default-features = false, features = ["rustls-tls"] }
 counter = "0.5.6"
@@ -16,6 +16,7 @@ derive_builder = "0.11.2"
 dotenvy = "0.15.6"
 glob = "0.3.0"
 humantime = "2.1.0"
+itertools = "0.10.5"
 maud = "0.23.0"
 moka = "0.9.4"
 mp3-metadata = "0.3.4"

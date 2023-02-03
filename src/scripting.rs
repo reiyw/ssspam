@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use parking_lot::RwLock;
-use rhai::{Engine, packages::{BasicMathPackage, Package}};
+use rhai::{
+    packages::{BasicMathPackage, Package},
+    Engine,
+};
 
 pub fn interpret_rhai(source: &str) -> anyhow::Result<String> {
     let result = Arc::new(RwLock::new(String::new()));

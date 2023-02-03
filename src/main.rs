@@ -77,9 +77,6 @@ struct Opt {
 
     #[clap(long, env, value_parser)]
     config_dir: PathBuf,
-
-    #[clap(flatten)]
-    verbose: clap_verbosity_flag::Verbosity,
 }
 
 #[tokio::main]

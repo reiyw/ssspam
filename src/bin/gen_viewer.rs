@@ -17,7 +17,7 @@ struct Opt {
 
 fn main() -> anyhow::Result<()> {
     dotenv().ok();
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
 
     let markup = html! {
         html {
