@@ -6,12 +6,14 @@ use rhai::{
     packages::{BasicMathPackage, Package},
     Engine,
 };
+use rhai_rand::RandomPackage;
 
 pub fn interpret_rhai(source: &str) -> anyhow::Result<String> {
     let result = Arc::new(RwLock::new(String::new()));
 
     let mut engine = Engine::new();
     BasicMathPackage::new().register_into_engine(&mut engine);
+    RandomPackage::new().register_into_engine(&mut engine);
 
     // Override action of 'print' function
     let logger = result.clone();

@@ -1934,6 +1934,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rhai-rand"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f74fe74ca6741a852884d9212f35405b1d30b412cc5fec8c59bad35bd692b862"
+dependencies = [
+ "rand",
+ "rhai",
+]
+
+[[package]]
 name = "rhai_codegen"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2340,6 +2350,7 @@ dependencies = [
  "prettytable-rs",
  "rand",
  "rhai",
+ "rhai-rand",
  "serde",
  "serde_json",
  "serenity",
