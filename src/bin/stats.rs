@@ -12,7 +12,6 @@ use ssspambot::SayCommands;
 #[derive(Parser, Debug)]
 #[command(about)]
 struct Args {
-    /// Name of the person to greet
     #[arg(long)]
     input: PathBuf,
 
@@ -32,9 +31,10 @@ fn main() -> anyhow::Result<()> {
 
     let mut counts: Counter<String> = Counter::new();
 
-    let data: Data = serde_json::from_reader(File::open(args.input)?)?;
-    for msg in data.messages {
-        if let Ok(cmds) = SayCommands::from_str(&msg.content) {
+    let mut reader = csv::Reader::from_reader(File::open(args.input)?);
+    for result in reader.deserialize() {
+        let record: Record = result?;
+        if let Ok(cmds) = SayCommands::from_str(&record.content) {
             for cmd in cmds.iter().unique() {
                 counts[&cmd.name] += 1;
             }
@@ -49,11 +49,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 #[derive(Debug, Deserialize)]
-struct Data {
-    messages: Vec<Message>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Message {
+struct Record {
+    #[serde(rename(deserialize = "Content"))]
     content: String,
 }

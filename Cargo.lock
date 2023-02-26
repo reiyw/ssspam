@@ -2323,6 +2323,7 @@ dependencies = [
  "clap-verbosity-flag",
  "cloud-storage",
  "counter",
+ "csv",
  "derive_builder",
  "dotenvy",
  "glob",
