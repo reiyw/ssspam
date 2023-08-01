@@ -165,12 +165,13 @@ impl SoundStorage {
     }
 
     pub fn calc_similarities(&self, query: impl AsRef<str>) -> Vec<(f64, SoundFile)> {
+        let query = query.as_ref().to_lowercase();
         let mut sims: Vec<_> = self
             .sounds
             .iter()
             .map(|(name, sound)| {
                 (
-                    strsim::jaro_winkler(&query.as_ref().to_lowercase(), name),
+                    strsim::jaro_winkler(&query, name),
                     sound.clone(),
                 )
             })
