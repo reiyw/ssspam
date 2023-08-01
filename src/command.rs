@@ -166,9 +166,7 @@ async fn mute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         }
     };
 
-    let mut handler = handler_lock.lock().await;
-
-    handler.mute(true).await?;
+    handler_lock.lock().await.mute(true).await?;
 
     Ok(())
 }
@@ -197,9 +195,7 @@ async fn unmute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         }
     };
 
-    let mut handler = handler_lock.lock().await;
-
-    handler.mute(false).await?;
+    handler_lock.lock().await.mute(false).await?;
 
     Ok(())
 }
@@ -227,8 +223,7 @@ async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
             return Ok(());
         }
     };
-    let mut handler = handler_lock.lock().await;
-    handler.stop();
+    handler_lock.lock().await.stop();
 
     let guild_broadcast = ctx
         .data
@@ -285,8 +280,7 @@ async fn r_impl(ctx: &Context, args: Args) -> anyhow::Result<SayCommands> {
         .get::<SoundStorage>()
         .context("Could not get SoundStorage")?
         .clone();
-    let storage = storage.read();
-    let file = storage.get_random().context("Has no sound file")?;
+    let file = storage.read().get_random().context("Has no sound file")?;
     let cmds = SayCommands::from_str(&format!("{} {}", file.name, args.rest()))?;
     Ok(cmds)
 }
@@ -296,8 +290,7 @@ pub async fn s(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     if let Some(arg) = args.current() {
         let names: Vec<_> = {
             let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
-            let storage = storage.read();
-            let sims = storage.calc_similarities(arg);
+            let sims = storage.read().calc_similarities(arg);
             let names: Vec<_> = sims
                 .iter()
                 .take(20)
@@ -322,8 +315,7 @@ pub async fn st(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
         {
             let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
-            let storage = storage.read();
-            let sims = storage.calc_similarities(arg);
+            let sims = storage.read().calc_similarities(arg);
 
             table.set_format(*format::consts::FORMAT_CLEAN);
             table.set_titles(row!["Name", "Dur", "Updated"]);
@@ -526,7 +518,7 @@ async fn delete_impl(ctx: &Context, mut args: Args) -> anyhow::Result<Vec<String
     let mut deleted = Vec::new();
 
     for name in args.iter::<String>().flatten() {
-        let sound_file = { storage.read().get(name).cloned() };
+        let sound_file = { storage.read().get(name) };
         if let Some(file) = sound_file {
             if fs::remove_file(&file.path).is_ok()
                 && client
@@ -613,6 +605,7 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
                         if let Some(config) = config {
                             let config = config.clip_threshold(configs.get_clip_threshold());
                             let config = config.sharpness(configs.get_sharpness());
+                            drop(configs);
                             manager.set_config(config);
                         }
                     }

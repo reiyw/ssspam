@@ -173,7 +173,7 @@ async fn process_say_commands(
             continue;
         }
 
-        let sound_file = { storage.read().get(&say_command.name).cloned() };
+        let sound_file = { storage.read().get(&say_command.name) };
         if let Some(sound_file) = sound_file {
             let decoded =
                 match DecodedSaySound::from_command_and_file(&say_command, &sound_file).await {

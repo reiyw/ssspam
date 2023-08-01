@@ -147,8 +147,8 @@ impl SoundStorage {
         self.sounds.values()
     }
 
-    pub fn get(&self, name: impl AsRef<str>) -> Option<&SoundFile> {
-        self.sounds.get(&name.as_ref().to_lowercase())
+    pub fn get(&self, name: impl AsRef<str>) -> Option<SoundFile> {
+        self.sounds.get(&name.as_ref().to_lowercase()).cloned()
     }
 
     fn remove(&mut self, name: impl AsRef<str>) -> Option<SoundFile> {
@@ -159,19 +159,19 @@ impl SoundStorage {
         self.sounds.insert(sound.name.to_lowercase(), sound)
     }
 
-    pub fn get_random(&self) -> Option<&SoundFile> {
+    pub fn get_random(&self) -> Option<SoundFile> {
         let mut rng: StdRng = SeedableRng::from_entropy();
-        self.sounds.values().choose(&mut rng)
+        self.sounds.values().choose(&mut rng).cloned()
     }
 
-    pub fn calc_similarities(&self, query: impl AsRef<str>) -> Vec<(f64, &SoundFile)> {
+    pub fn calc_similarities(&self, query: impl AsRef<str>) -> Vec<(f64, SoundFile)> {
         let mut sims: Vec<_> = self
             .sounds
             .iter()
             .map(|(name, sound)| {
                 (
                     strsim::jaro_winkler(&query.as_ref().to_lowercase(), name),
-                    sound,
+                    sound.clone(),
                 )
             })
             .collect();
