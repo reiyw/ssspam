@@ -169,12 +169,7 @@ impl SoundStorage {
         let mut sims: Vec<_> = self
             .sounds
             .iter()
-            .map(|(name, sound)| {
-                (
-                    strsim::jaro_winkler(&query, name),
-                    sound.clone(),
-                )
-            })
+            .map(|(name, sound)| (strsim::jaro_winkler(&query, name), sound.clone()))
             .collect();
         sims.sort_by(|(d1, _), (d2, _)| d2.partial_cmp(d1).unwrap());
         sims
