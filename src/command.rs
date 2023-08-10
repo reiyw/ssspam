@@ -1,8 +1,9 @@
-use std::{fs, path::PathBuf, str::FromStr, time::Duration};
+use std::{collections::HashSet, fs, path::PathBuf, str::FromStr, time::Duration};
 
 use anyhow::Context as _;
 use async_zip::read::mem::ZipFileReader;
 use chrono::{DateTime, Utc};
+use itertools::Itertools;
 use prettytable::{format, Table};
 use serenity::{
     client::Context,
@@ -10,7 +11,7 @@ use serenity::{
         macros::{command, group},
         Args, CommandResult,
     },
-    model::{channel::Message, id::GuildId},
+    model::{channel::Message, id::GuildId, prelude::UserId},
     prelude::{Mentionable, TypeMapKey},
 };
 use systemstat::{Platform, System};
@@ -18,16 +19,31 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::oneshot::{self, Receiver, Sender},
 };
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::{
-    interpret_rhai, web::update_data_json, ChannelManager, Configs, GuildBroadcast, OpsMessage,
-    SayCommands, SaySoundCache, SoundStorage,
+    core::{process_from_string, ChannelUserManager},
+    interpret_rhai,
+    web::update_data_json,
+    ChannelManager, Configs, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache, SoundStorage,
 };
 
 #[group]
 #[only_in(guilds)]
-#[commands(join, leave, mute, unmute, stop, clean_cache, r, s, st, uptime, rhai)]
+#[commands(
+    join,
+    leave,
+    mute,
+    unmute,
+    stop,
+    clean_cache,
+    r,
+    s,
+    st,
+    uptime,
+    rhai,
+    config
+)]
 struct General;
 
 #[command]
@@ -111,7 +127,7 @@ async fn leave_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn leave_voice_channel(ctx: Context, guild_id: GuildId) -> anyhow::Result<()> {
+pub async fn leave_voice_channel(ctx: &Context, guild_id: GuildId) -> anyhow::Result<()> {
     let channel_manager = ctx
         .data
         .read()
@@ -130,12 +146,89 @@ pub async fn leave_voice_channel(ctx: Context, guild_id: GuildId) -> anyhow::Res
             .await
             .context("Should get members")?;
         if members.iter().all(|m| m.user.bot) {
-            let manager = songbird::get(&ctx)
+            let manager = songbird::get(ctx)
                 .await
                 .context("Songbird Voice client placed in at initialization.")?
                 .clone();
             manager.remove(guild_id).await?;
             channel_manager.write().leave(&guild_id);
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn play_join_or_leave_sound(
+    ctx: &Context,
+    guild_id: GuildId,
+    actioned_user: UserId,
+) -> anyhow::Result<()> {
+    let current_users: HashSet<UserId> = {
+        let channel_manager = ctx
+            .data
+            .read()
+            .await
+            .get::<ChannelManager>()
+            .context("Could not get ChannelManager")?
+            .clone();
+        let bots_voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
+        if let Some(bots_voice_channel_id) = bots_voice_channel_id {
+            let channel = ctx
+                .cache
+                .guild_channel(bots_voice_channel_id)
+                .context("Failed to get GuildChannel")?;
+            let members = channel
+                .members(&ctx.cache)
+                .await
+                .context("Should get members")?;
+            HashSet::from_iter(members.into_iter().map(|m| m.user.id))
+        } else {
+            return Ok(());
+        }
+    };
+
+    let channel_user_manager = ctx
+        .data
+        .read()
+        .await
+        .get::<ChannelUserManager>()
+        .context("Could not get ChannelUserManager")?
+        .clone();
+    let old_users = channel_user_manager.read().get(&guild_id);
+
+    let configs = ctx
+        .data
+        .read()
+        .await
+        .get::<Configs>()
+        .context("Could not get Configs")?
+        .clone();
+
+    // アクションを起こしたユーザーが以前いなくて今いるなら join したことになる
+    let mut diff = current_users.difference(&old_users);
+    if diff.contains(&actioned_user) {
+        {
+            let mut lock = channel_user_manager.write();
+            lock.add(guild_id, actioned_user);
+        }
+        let sound = { configs.read().get_joinsound(&actioned_user) };
+        if let Some(sound) = sound {
+            info!(sound, "playing joinsound");
+            process_from_string(ctx, guild_id, sound.as_str()).await?
+        }
+    }
+
+    // アクションを起こしたユーザーが今いなくて以前いたなら leave したことになる
+    let mut diff = old_users.difference(&current_users);
+    if diff.contains(&actioned_user) {
+        {
+            let mut lock = channel_user_manager.write();
+            lock.remove(&guild_id, &actioned_user);
+        }
+        let sound = { configs.read().get_leavesound(&actioned_user) };
+        if let Some(sound) = sound {
+            info!(sound, "playing leavesound");
+            process_from_string(ctx, guild_id, sound.as_str()).await?
         }
     }
 
@@ -377,7 +470,7 @@ pub async fn rhai(ctx: &Context, msg: &Message) -> CommandResult {
 #[group]
 #[owners_only]
 #[only_in(guilds)]
-#[commands(upload, delete, shutdown, config)]
+#[commands(upload, delete, shutdown)]
 struct Owner;
 
 #[command]
@@ -595,7 +688,7 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
                 Some(value) => {
                     {
                         let mut configs = configs.write();
-                        configs.set(&guild.id, key, value)?;
+                        configs.set(&guild.id, key, value, &msg.author.id)?;
                     }
 
                     let manager = songbird::get(ctx).await.unwrap();
@@ -612,6 +705,13 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
                 }
                 None => {}
             },
+            None => {}
+        },
+        Some(sub_cmd) if sub_cmd == "remove" => match args.clone().advance().current() {
+            Some(key) => {
+                let mut configs = configs.write();
+                configs.remove(&guild.id, key, &msg.author.id)?;
+            }
             None => {}
         },
         Some(sub_cmd) if sub_cmd == "list" => {}

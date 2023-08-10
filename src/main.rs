@@ -17,8 +17,9 @@ use serenity::{
 };
 use songbird::{self, SerenityInit, Songbird};
 use ssspambot::{
-    leave_voice_channel, process_message, sound::watch_sound_storage, ChannelManager, Configs,
-    GuildBroadcast, SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
+    command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
+    process_message, sound::watch_sound_storage, ChannelManager, Configs, GuildBroadcast,
+    SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
 };
 use tracing::{info, warn};
 
@@ -56,7 +57,11 @@ impl EventHandler for Handler {
 
     async fn voice_state_update(&self, ctx: Context, _old: Option<VoiceState>, new: VoiceState) {
         if let Some(guild_id) = new.guild_id {
-            if let Err(e) = leave_voice_channel(ctx, guild_id).await {
+            if let Err(e) = play_join_or_leave_sound(&ctx, guild_id, new.user_id).await {
+                warn!("Error while playing join or leave sound: {e:?}");
+            }
+
+            if let Err(e) = leave_voice_channel(&ctx, guild_id).await {
                 warn!("Error while deciding whether to leave: {e:?}");
             }
         }
@@ -129,6 +134,8 @@ async fn main() -> anyhow::Result<()> {
         data.insert::<ChannelManager>(Arc::new(RwLock::new(ChannelManager::load_or_new(
             opt.config_dir.join("channel_state.json"),
         ))));
+
+        data.insert::<ChannelUserManager>(Arc::new(RwLock::new(ChannelUserManager::default())));
 
         data.insert::<SaySoundCache>(Arc::new(RwLock::new(SaySoundCache::new(
             50,

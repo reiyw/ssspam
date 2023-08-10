@@ -1,4 +1,10 @@
-use std::{collections::HashMap, fs, path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
 
 use anyhow::Context as _;
 use parking_lot::{Mutex, RwLock};
@@ -8,6 +14,7 @@ use serenity::{
     model::{
         channel::Message,
         id::{ChannelId, GuildId},
+        prelude::UserId,
     },
     prelude::TypeMapKey,
 };
@@ -75,6 +82,34 @@ impl ChannelManager {
 }
 
 impl TypeMapKey for ChannelManager {
+    type Value = Arc<RwLock<Self>>;
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ChannelUserManager {
+    users: HashMap<GuildId, HashSet<UserId>>,
+}
+
+impl ChannelUserManager {
+    pub fn get(&self, guild_id: &GuildId) -> HashSet<UserId> {
+        self.users
+            .get(guild_id)
+            .map_or_else(HashSet::new, |users| users.clone())
+    }
+
+    pub fn add(&mut self, guild_id: GuildId, user_id: UserId) -> bool {
+        let users = self.users.entry(guild_id).or_default();
+        users.insert(user_id)
+    }
+
+    pub fn remove(&mut self, guild_id: &GuildId, user_id: &UserId) -> bool {
+        self.users
+            .get_mut(guild_id)
+            .map_or(false, |users| users.remove(user_id))
+    }
+}
+
+impl TypeMapKey for ChannelUserManager {
     type Value = Arc<RwLock<Self>>;
 }
 
@@ -177,6 +212,45 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
 
     tokio::select! {
         res = play_say_commands(saycmds, ctx, guild.id) => res,
+        _ = async move {
+            while let Ok(msg) = rx.recv().await {
+                if msg == OpsMessage::Stop {
+                    break;
+                }
+            }
+        } => Ok(())
+    }
+}
+
+pub async fn process_from_string(
+    ctx: &Context,
+    guild_id: GuildId,
+    sound: &str,
+) -> anyhow::Result<()> {
+    let saycmds = {
+        let mut saycmds = match SayCommands::from_str(sound) {
+            Ok(saycmds) => saycmds,
+            // A parse failure does not imply an error because normal messages also exist.
+            Err(_) => return Ok(()),
+        };
+        if saycmds.is_empty() {
+            return Ok(());
+        }
+        saycmds.sanitize();
+        saycmds
+    };
+
+    let guild_broadcast = ctx
+        .data
+        .read()
+        .await
+        .get::<GuildBroadcast>()
+        .context("Could not get GuildBroadcast")?
+        .clone();
+    let mut rx = guild_broadcast.lock().subscribe(guild_id);
+
+    tokio::select! {
+        res = play_say_commands(saycmds, ctx, guild_id) => res,
         _ = async move {
             while let Ok(msg) = rx.recv().await {
                 if msg == OpsMessage::Stop {
