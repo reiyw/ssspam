@@ -86,6 +86,16 @@ impl Configs {
             .context("Faield to remove joinsound")
     }
 
+    pub fn get(&self, _guild_id: &GuildId, key: &str, user_id: &UserId) -> Option<String> {
+        match key {
+            "clip_threshold" => Some(self.get_clip_threshold().to_string()),
+            "sharpness" => Some(self.get_sharpness().to_string()),
+            "joinsound" => self.get_joinsound(user_id),
+            "leavesound" => self.get_leavesound(user_id),
+            _ => None,
+        }
+    }
+
     pub fn set(
         &mut self,
         _guild_id: &GuildId,

@@ -687,8 +687,18 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
             Some(key) => match args.clone().advance().advance().current() {
                 Some(value) => {
                     {
-                        let mut configs = configs.write();
-                        configs.set(&guild.id, key, value, &msg.author.id)?;
+                        let old_value = {
+                            let mut configs = configs.write();
+                            let old_value = configs.get(&guild.id, key, &msg.author.id);
+                            configs.set(&guild.id, key, value, &msg.author.id)?;
+                            old_value
+                        };
+                        if let Some(old_value) = old_value {
+                            msg.reply(ctx, format!("Set {key}: {old_value} -> {value}"))
+                                .await?;
+                        } else {
+                            msg.reply(ctx, format!("Set {key}: {value}")).await?;
+                        }
                     }
 
                     let manager = songbird::get(ctx).await.unwrap();
@@ -709,8 +719,16 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
         },
         Some(sub_cmd) if sub_cmd == "remove" => match args.clone().advance().current() {
             Some(key) => {
-                let mut configs = configs.write();
-                configs.remove(&guild.id, key, &msg.author.id)?;
+                let old_value = {
+                    let mut configs = configs.write();
+                    let old_value = configs.get(&guild.id, key, &msg.author.id);
+                    configs.remove(&guild.id, key, &msg.author.id)?;
+                    old_value
+                };
+                if let Some(old_value) = old_value {
+                    msg.reply(ctx, format!("Removed {key}: {old_value}"))
+                        .await?;
+                }
             }
             None => {}
         },
