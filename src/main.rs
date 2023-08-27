@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration, num::NonZeroU64};
 
 use clap::Parser;
 use dotenvy::dotenv;
@@ -43,7 +43,7 @@ impl EventHandler for Handler {
         for guild_id in guilds {
             let voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
             if let Some(voice_channel_id) = voice_channel_id {
-                let (_, res) = manager.join(guild_id, voice_channel_id).await;
+                let res = manager.join(guild_id, voice_channel_id).await;
                 res.ok();
             }
         }
@@ -93,33 +93,24 @@ async fn main() -> anyhow::Result<()> {
     let opt = Opt::parse();
 
     let framework = StandardFramework::new()
-        .configure(|c| {
-            c.prefix(opt.command_prefix).owners(HashSet::from([
-                // TODO: Use Discord's team feature
-                UserId(310620137608970240), // auzen
-                UserId(342903795380125698), // nicotti
-            ]))
-        })
         .group(&GENERAL_GROUP)
         .group(&OWNER_GROUP);
+    framework.configure(|c| {
+        c.prefix(opt.command_prefix).owners(HashSet::from([
+            // TODO: Use Discord's team feature
+            UserId(NonZeroU64::new(310620137608970240).unwrap()), // auzen
+            UserId(NonZeroU64::new(342903795380125698).unwrap()), // nicotti
+        ]))
+    });
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
     let configs = Configs::load_or_create(opt.config_dir.join("config.json"))?;
 
-    let voice = Songbird::serenity();
-    {
-        let config = voice.config.read().clone();
-        if let Some(config) = config {
-            let config = config.clip_threshold(configs.get_clip_threshold());
-            let config = config.sharpness(configs.get_sharpness());
-            voice.set_config(config);
-        }
-    }
     let mut client = Client::builder(&opt.discord_token, intents)
         .event_handler(Handler)
         .framework(framework)
-        .register_songbird_with(voice)
+        .register_songbird()
         .await
         .expect("Error while creating client");
 
