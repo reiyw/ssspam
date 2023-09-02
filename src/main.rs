@@ -150,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
             _ = tokio::signal::ctrl_c() => {},
             _ = shutdown_receiver => {},
         }
-        shard_manager.lock().await.shutdown_all().await;
+        shard_manager.shutdown_all().await;
     });
 
     let _ = client
