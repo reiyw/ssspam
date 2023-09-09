@@ -681,7 +681,7 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
         .clone();
     let guild_id = msg.guild_id.context("Guild's ID was not found")?;
     match args.clone().current() {
-        Some(sub_cmd) if sub_cmd == "set" => match args.clone().advance().current() {
+        Some("set") => match args.clone().advance().current() {
             Some(key) => match args.clone().advance().advance().current() {
                 Some(value) => {
                     let old_value = {
@@ -701,7 +701,7 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
             },
             None => {}
         },
-        Some(sub_cmd) if sub_cmd == "remove" => match args.clone().advance().current() {
+        Some("remove") => match args.clone().advance().current() {
             Some(key) => {
                 let old_value = {
                     let mut configs = configs.write();
@@ -716,7 +716,7 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
             }
             None => {}
         },
-        Some(sub_cmd) if sub_cmd == "list" => {}
+        Some("list") => {}
         Some(_sub_cmd) => {}
         None => {}
     }

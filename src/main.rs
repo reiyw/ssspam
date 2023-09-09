@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration, num::NonZeroU64};
+use std::{collections::HashSet, num::NonZeroU64, path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
 use dotenvy::dotenv;
@@ -15,7 +15,7 @@ use serenity::{
     },
     prelude::GatewayIntents,
 };
-use songbird::{self, SerenityInit, Songbird};
+use songbird::{self, SerenityInit};
 use ssspambot::{
     command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
     process_message, sound::watch_sound_storage, ChannelManager, Configs, GuildBroadcast,

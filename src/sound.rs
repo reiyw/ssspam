@@ -323,7 +323,7 @@ mod test {
     #[test]
     fn test_calc_similarities() {
         let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sound");
-        let storage = SoundStorage::load(&sound_dir);
+        let storage = SoundStorage::load(sound_dir);
         let sims = storage.calc_similarities("dadei");
         assert_eq!(sims[0].1, storage.get("dadeisan").unwrap());
         assert_eq!(sims[1].1, storage.get("d").unwrap());

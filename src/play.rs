@@ -1,6 +1,5 @@
 use std::{
     cmp,
-    path::PathBuf,
     process::{Command, Stdio},
     sync::Arc,
     time::Duration,
@@ -11,7 +10,7 @@ use moka::sync::Cache;
 use parking_lot::RwLock;
 use serenity::{client::Context, model::id::GuildId, prelude::TypeMapKey};
 use songbird::{
-    input::{cached::Memory, File, Input},
+    input::cached::Memory,
     tracks::{Track, TrackHandle},
     Call,
 };
@@ -275,6 +274,6 @@ async fn send_tracks(
 
 pub async fn play_sound(mem: &Memory, handler_lock: Arc<Mutex<Call>>, volume: f32) -> TrackHandle {
     let mut handler = handler_lock.lock().await;
-    let audio = handler.play(Track::new(mem.new_handle().try_into().unwrap()).volume(volume));
-    audio
+
+    handler.play(Track::new(mem.new_handle().try_into().unwrap()).volume(volume))
 }
