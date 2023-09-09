@@ -19,7 +19,7 @@ use tracing::warn;
 
 use crate::{sslang::Action, SayCommand, SayCommands, SoundFile, SoundStorage};
 
-static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(60);
+static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(180);
 static VOLUME: f32 = 0.05;
 
 #[derive(Clone)]
@@ -82,8 +82,8 @@ impl DecodedSaySound {
                 dur = cmp::min(dur, command.wait as i64);
             }
 
-            // Capped at 60 secs during encoding.
-            dur = cmp::min(dur, 60 * 1000);
+            // Capped at 180 secs during encoding.
+            dur = cmp::min(dur, 180 * 1000);
 
             Duration::from_millis(dur as u64)
         };
@@ -141,7 +141,7 @@ async fn decode(command: &SayCommand, file: &SoundFile) -> anyhow::Result<Memory
             "-acodec",
             "pcm_f32le",
             "-t",
-            "60",
+            "180",
             "-af",
             &audio_filters.join(","),
             "-",
