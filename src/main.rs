@@ -1,4 +1,4 @@
-use std::{collections::HashSet, num::NonZeroU64, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
 use dotenvy::dotenv;
@@ -7,12 +7,7 @@ use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
     framework::StandardFramework,
-    model::{
-        channel::Message,
-        gateway::Ready,
-        id::{GuildId, UserId},
-        voice::VoiceState,
-    },
+    model::{channel::Message, gateway::Ready, id::GuildId, voice::VoiceState},
     prelude::GatewayIntents,
 };
 use songbird::{self, SerenityInit};
@@ -98,8 +93,8 @@ async fn main() -> anyhow::Result<()> {
     framework.configure(|c| {
         c.prefix(opt.command_prefix).owners(HashSet::from([
             // TODO: Use Discord's team feature
-            UserId(NonZeroU64::new(310620137608970240).unwrap()), // auzen
-            UserId(NonZeroU64::new(342903795380125698).unwrap()), // nicotti
+            310620137608970240.into(), // auzen
+            342903795380125698.into(), // nicotti
         ]))
     });
 
