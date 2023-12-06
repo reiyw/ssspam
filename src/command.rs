@@ -142,7 +142,7 @@ pub async fn leave_voice_channel(ctx: &Context, guild_id: GuildId) -> anyhow::Re
     if let Some(bots_voice_channel_id) = bots_voice_channel_id {
         let channel = ctx
             .cache
-            .guild_channel(bots_voice_channel_id)
+            .channel(bots_voice_channel_id)
             .context("Failed to get GuildChannel")?
             .clone();
         let members = channel.members(&ctx.cache)?;
@@ -176,7 +176,7 @@ pub async fn play_join_or_leave_sound(
         if let Some(bots_voice_channel_id) = bots_voice_channel_id {
             let channel = ctx
                 .cache
-                .guild_channel(bots_voice_channel_id)
+                .channel(bots_voice_channel_id)
                 .context("Failed to get GuildChannel")?
                 .clone();
             let members = channel.members(&ctx.cache)?;

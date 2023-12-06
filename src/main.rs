@@ -6,7 +6,7 @@ use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
-    framework::StandardFramework,
+    framework::{standard::Configuration, StandardFramework},
     model::{channel::Message, gateway::Ready, id::GuildId, voice::VoiceState},
     prelude::GatewayIntents,
 };
@@ -90,13 +90,15 @@ async fn main() -> anyhow::Result<()> {
     let framework = StandardFramework::new()
         .group(&GENERAL_GROUP)
         .group(&OWNER_GROUP);
-    framework.configure(|c| {
-        c.prefix(opt.command_prefix).owners(HashSet::from([
-            // TODO: Use Discord's team feature
-            310620137608970240.into(), // auzen
-            342903795380125698.into(), // nicotti
-        ]))
-    });
+    framework.configure(
+        Configuration::new()
+            .prefix(opt.command_prefix)
+            .owners(HashSet::from([
+                // TODO: Use Discord's team feature
+                310620137608970240.into(), // auzen
+                342903795380125698.into(), // nicotti
+            ])),
+    );
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
