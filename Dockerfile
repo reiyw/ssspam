@@ -14,10 +14,10 @@ RUN cargo build --release
 
 FROM debian:bullseye-slim AS ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends wget xz-utils \
-    && wget -q --no-check-certificate https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
-    && tar xf ffmpeg-release-amd64-static.tar.xz \
-    && mv ffmpeg-6.0-amd64-static/ffmpeg /usr/local/bin/ \
-    && mv ffmpeg-6.0-amd64-static/ffprobe /usr/local/bin/
+    && wget -q --no-check-certificate https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-n6.1-latest-linux64-gpl-6.1.tar.xz \
+    && tar xf ffmpeg-n6.1-latest-linux64-gpl-6.1.tar.xz \
+    && mv ffmpeg-n6.1-latest-linux64-gpl-6.1/bin/ffmpeg /usr/local/bin/ \
+    && mv ffmpeg-n6.1-latest-linux64-gpl-6.1/bin/ffprobe /usr/local/bin/
 
 FROM debian:bullseye-slim AS runtime
 WORKDIR /app
