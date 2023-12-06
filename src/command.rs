@@ -55,7 +55,10 @@ pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 async fn join_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
+    let guild = msg
+        .guild(&ctx.cache)
+        .context("Guild's ID was not found")?
+        .clone();
     let voice_channel_id = guild
         .voice_states
         .get(&msg.author.id)
@@ -73,8 +76,8 @@ async fn join_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let (_handler_lock, success_reader) = manager.join(guild.id, voice_channel_id).await;
-    if success_reader.is_ok() {
+    let handler_lock = manager.join(guild.id, voice_channel_id).await;
+    if handler_lock.is_ok() {
         msg.channel_id
             .say(&ctx.http, &format!("Joined {}", voice_channel_id.mention()))
             .await?;
@@ -106,14 +109,14 @@ pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 async fn leave_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
+    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
 
     let manager = songbird::get(ctx)
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    manager.remove(guild.id).await?;
+    manager.remove(guild_id).await?;
 
     let channel_manager = ctx
         .data
@@ -122,7 +125,7 @@ async fn leave_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         .get::<ChannelManager>()
         .context("Could not get ChannelManager")?
         .clone();
-    channel_manager.write().leave(&guild.id);
+    channel_manager.write().leave(&guild_id);
 
     Ok(())
 }
@@ -139,12 +142,10 @@ pub async fn leave_voice_channel(ctx: &Context, guild_id: GuildId) -> anyhow::Re
     if let Some(bots_voice_channel_id) = bots_voice_channel_id {
         let channel = ctx
             .cache
-            .guild_channel(bots_voice_channel_id)
-            .context("Failed to get GuildChannel")?;
-        let members = channel
-            .members(&ctx.cache)
-            .await
-            .context("Should get members")?;
+            .channel(bots_voice_channel_id)
+            .context("Failed to get GuildChannel")?
+            .clone();
+        let members = channel.members(&ctx.cache)?;
         if members.iter().all(|m| m.user.bot) {
             let manager = songbird::get(ctx)
                 .await
@@ -175,12 +176,10 @@ pub async fn play_join_or_leave_sound(
         if let Some(bots_voice_channel_id) = bots_voice_channel_id {
             let channel = ctx
                 .cache
-                .guild_channel(bots_voice_channel_id)
-                .context("Failed to get GuildChannel")?;
-            let members = channel
-                .members(&ctx.cache)
-                .await
-                .context("Should get members")?;
+                .channel(bots_voice_channel_id)
+                .context("Failed to get GuildChannel")?
+                .clone();
+            let members = channel.members(&ctx.cache)?;
             HashSet::from_iter(members.into_iter().map(|m| m.user.id))
         } else {
             return Ok(());
@@ -244,14 +243,14 @@ pub async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 async fn mute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
+    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
 
     let manager = songbird::get(ctx)
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let handler_lock = match manager.get(guild.id) {
+    let handler_lock = match manager.get(guild_id) {
         Some(handler) => handler,
         None => {
             msg.reply(ctx, "Not in a voice channel").await?;
@@ -273,14 +272,14 @@ pub async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 async fn unmute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
+    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
 
     let manager = songbird::get(ctx)
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let handler_lock = match manager.get(guild.id) {
+    let handler_lock = match manager.get(guild_id) {
         Some(handler) => handler,
         None => {
             msg.reply(ctx, "Not in a voice channel").await?;
@@ -302,14 +301,13 @@ pub async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
 }
 
 async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
-
+    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
     let manager = songbird::get(ctx)
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let handler_lock = match manager.get(guild.id) {
+    let handler_lock = match manager.get(guild_id) {
         Some(handler) => handler,
         None => {
             msg.reply(ctx, "Not in a voice channel").await?;
@@ -325,7 +323,7 @@ async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
         .get::<GuildBroadcast>()
         .context("Could not get GuildBroadcast")?
         .clone();
-    let tx = guild_broadcast.lock().get_sender(guild.id);
+    let tx = guild_broadcast.lock().get_sender(guild_id);
     tx.send(OpsMessage::Stop)?;
 
     Ok(())
@@ -681,48 +679,34 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
         .get::<Configs>()
         .context("Could not get Configs")?
         .clone();
-    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
+    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
     match args.clone().current() {
-        Some(sub_cmd) if sub_cmd == "set" => match args.clone().advance().current() {
+        Some("set") => match args.clone().advance().current() {
             Some(key) => match args.clone().advance().advance().current() {
                 Some(value) => {
-                    {
-                        let old_value = {
-                            let mut configs = configs.write();
-                            let old_value = configs.get(&guild.id, key, &msg.author.id);
-                            configs.set(&guild.id, key, value, &msg.author.id)?;
-                            old_value
-                        };
-                        if let Some(old_value) = old_value {
-                            msg.reply(ctx, format!("Set {key}: {old_value} -> {value}"))
-                                .await?;
-                        } else {
-                            msg.reply(ctx, format!("Set {key}: {value}")).await?;
-                        }
-                    }
-
-                    let manager = songbird::get(ctx).await.unwrap();
-                    let configs = configs.read();
-                    {
-                        let config = manager.config.read().clone();
-                        if let Some(config) = config {
-                            let config = config.clip_threshold(configs.get_clip_threshold());
-                            let config = config.sharpness(configs.get_sharpness());
-                            drop(configs);
-                            manager.set_config(config);
-                        }
+                    let old_value = {
+                        let mut configs = configs.write();
+                        let old_value = configs.get(&guild_id, key, &msg.author.id);
+                        configs.set(&guild_id, key, value, &msg.author.id)?;
+                        old_value
+                    };
+                    if let Some(old_value) = old_value {
+                        msg.reply(ctx, format!("Set {key}: {old_value} -> {value}"))
+                            .await?;
+                    } else {
+                        msg.reply(ctx, format!("Set {key}: {value}")).await?;
                     }
                 }
                 None => {}
             },
             None => {}
         },
-        Some(sub_cmd) if sub_cmd == "remove" => match args.clone().advance().current() {
+        Some("remove") => match args.clone().advance().current() {
             Some(key) => {
                 let old_value = {
                     let mut configs = configs.write();
-                    let old_value = configs.get(&guild.id, key, &msg.author.id);
-                    configs.remove(&guild.id, key, &msg.author.id)?;
+                    let old_value = configs.get(&guild_id, key, &msg.author.id);
+                    configs.remove(&guild_id, key, &msg.author.id)?;
                     old_value
                 };
                 if let Some(old_value) = old_value {
@@ -732,7 +716,7 @@ async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result
             }
             None => {}
         },
-        Some(sub_cmd) if sub_cmd == "list" => {}
+        Some("list") => {}
         Some(_sub_cmd) => {}
         None => {}
     }

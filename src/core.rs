@@ -165,7 +165,10 @@ impl TypeMapKey for GuildBroadcast {
 }
 
 pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild = msg.guild(&ctx.cache).context("Guild's ID was not found")?;
+    let guild = msg
+        .guild(&ctx.cache)
+        .context("Guild's ID was not found")?
+        .clone();
 
     let channel_manager = ctx
         .data

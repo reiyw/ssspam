@@ -1,13 +1,17 @@
-use std::{cmp, sync::Arc, time::Duration};
+use std::{
+    cmp,
+    process::{Command, Stdio},
+    sync::Arc,
+    time::Duration,
+};
 
 use anyhow::Context as _;
 use moka::sync::Cache;
 use parking_lot::RwLock;
 use serenity::{client::Context, model::id::GuildId, prelude::TypeMapKey};
 use songbird::{
-    create_player,
-    input::{cached::Memory, ffmpeg_optioned},
-    tracks::TrackHandle,
+    input::cached::Memory,
+    tracks::{Track, TrackHandle},
     Call,
 };
 use tokio::sync::Mutex;
@@ -15,10 +19,10 @@ use tracing::warn;
 
 use crate::{sslang::Action, SayCommand, SayCommands, SoundFile, SoundStorage};
 
-static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(60);
+static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(180);
 static VOLUME: f32 = 0.05;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SaySoundCache {
     cache: Cache<SayCommand, Arc<DecodedSaySound>>,
 }
@@ -50,7 +54,7 @@ impl TypeMapKey for SaySoundCache {
     type Value = Arc<RwLock<Self>>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct DecodedSaySound {
     decoded_data: Memory,
 
@@ -78,8 +82,8 @@ impl DecodedSaySound {
                 dur = cmp::min(dur, command.wait as i64);
             }
 
-            // Capped at 60 secs during encoding.
-            dur = cmp::min(dur, 60 * 1000);
+            // Capped at 180 secs during encoding.
+            dur = cmp::min(dur, 180 * 1000);
 
             Duration::from_millis(dur as u64)
         };
@@ -97,10 +101,7 @@ impl DecodedSaySound {
     }
 }
 
-async fn decode(
-    command: &SayCommand,
-    file: &SoundFile,
-) -> Result<Memory, songbird::input::error::Error> {
+async fn decode(command: &SayCommand, file: &SoundFile) -> anyhow::Result<Memory> {
     let audio_filters = {
         let speed_multiplier = command.speed as f64 / 100.0;
         let pitch_multiplier = command.pitch as f64 / 100.0;
@@ -123,28 +124,32 @@ async fn decode(
         None => "0".to_string(),
     };
 
-    Memory::new(
-        ffmpeg_optioned(
-            &file.path,
-            &["-ss", &format!("{}ms", command.start), "-t", &t_opt_value],
-            &[
-                "-f",
-                "s16le",
-                "-ac",
-                &file.channel_count().to_string(),
-                "-ar",
-                "48000",
-                "-acodec",
-                "pcm_f32le",
-                "-t",
-                "60",
-                "-af",
-                &audio_filters.join(","),
-                "-",
-            ],
-        )
-        .await?,
-    )
+    let ffmpeg_out = Command::new("ffmpeg")
+        .args([
+            "-ss",
+            &format!("{}ms", command.start),
+            "-t",
+            &t_opt_value,
+            "-i",
+            &file.path.to_str().unwrap(),
+            "-f",
+            "wav",
+            "-ac",
+            &file.channel_count().to_string(),
+            "-ar",
+            "48000",
+            "-acodec",
+            "pcm_f32le",
+            "-t",
+            "180",
+            "-af",
+            &audio_filters.join(","),
+            "-",
+        ])
+        .stderr(Stdio::null())
+        .stdin(Stdio::null())
+        .output()?;
+    Ok(Memory::new(ffmpeg_out.stdout.into()).await?)
 }
 
 async fn process_say_commands(
@@ -268,9 +273,7 @@ async fn send_tracks(
 }
 
 pub async fn play_sound(mem: &Memory, handler_lock: Arc<Mutex<Call>>, volume: f32) -> TrackHandle {
-    let (mut audio, audio_handle) = create_player(mem.new_handle().try_into().unwrap());
-    audio.set_volume(volume);
     let mut handler = handler_lock.lock().await;
-    handler.play(audio);
-    audio_handle
+
+    handler.play(Track::new(mem.new_handle().into()).volume(volume))
 }

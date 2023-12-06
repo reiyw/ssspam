@@ -6,16 +6,11 @@ use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
-    framework::StandardFramework,
-    model::{
-        channel::Message,
-        gateway::Ready,
-        id::{GuildId, UserId},
-        voice::VoiceState,
-    },
+    framework::{standard::Configuration, StandardFramework},
+    model::{channel::Message, gateway::Ready, id::GuildId, voice::VoiceState},
     prelude::GatewayIntents,
 };
-use songbird::{self, SerenityInit, Songbird};
+use songbird::{self, SerenityInit};
 use ssspambot::{
     command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
     process_message, sound::watch_sound_storage, ChannelManager, Configs, GuildBroadcast,
@@ -43,7 +38,7 @@ impl EventHandler for Handler {
         for guild_id in guilds {
             let voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
             if let Some(voice_channel_id) = voice_channel_id {
-                let (_, res) = manager.join(guild_id, voice_channel_id).await;
+                let res = manager.join(guild_id, voice_channel_id).await;
                 res.ok();
             }
         }
@@ -93,33 +88,26 @@ async fn main() -> anyhow::Result<()> {
     let opt = Opt::parse();
 
     let framework = StandardFramework::new()
-        .configure(|c| {
-            c.prefix(opt.command_prefix).owners(HashSet::from([
-                // TODO: Use Discord's team feature
-                UserId(310620137608970240), // auzen
-                UserId(342903795380125698), // nicotti
-            ]))
-        })
         .group(&GENERAL_GROUP)
         .group(&OWNER_GROUP);
+    framework.configure(
+        Configuration::new()
+            .prefix(opt.command_prefix)
+            .owners(HashSet::from([
+                // TODO: Use Discord's team feature
+                310620137608970240.into(), // auzen
+                342903795380125698.into(), // nicotti
+            ])),
+    );
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
     let configs = Configs::load_or_create(opt.config_dir.join("config.json"))?;
 
-    let voice = Songbird::serenity();
-    {
-        let config = voice.config.read().clone();
-        if let Some(config) = config {
-            let config = config.clip_threshold(configs.get_clip_threshold());
-            let config = config.sharpness(configs.get_sharpness());
-            voice.set_config(config);
-        }
-    }
     let mut client = Client::builder(&opt.discord_token, intents)
         .event_handler(Handler)
         .framework(framework)
-        .register_songbird_with(voice)
+        .register_songbird()
         .await
         .expect("Error while creating client");
 
@@ -159,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
             _ = tokio::signal::ctrl_c() => {},
             _ = shutdown_receiver => {},
         }
-        shard_manager.lock().await.shutdown_all().await;
+        shard_manager.shutdown_all().await;
     });
 
     let _ = client
