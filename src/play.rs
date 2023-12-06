@@ -275,5 +275,5 @@ async fn send_tracks(
 pub async fn play_sound(mem: &Memory, handler_lock: Arc<Mutex<Call>>, volume: f32) -> TrackHandle {
     let mut handler = handler_lock.lock().await;
 
-    handler.play(Track::new(mem.new_handle().try_into().unwrap()).volume(volume))
+    handler.play(Track::new(mem.new_handle().into()).volume(volume))
 }
