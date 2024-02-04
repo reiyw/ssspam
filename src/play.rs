@@ -66,6 +66,7 @@ struct DecodedSaySound {
 }
 
 impl DecodedSaySound {
+    #[tracing::instrument]
     async fn from_command_and_file(command: &SayCommand, file: &SoundFile) -> anyhow::Result<Self> {
         let decoded_data = decode(command, file).await?;
 
@@ -101,6 +102,7 @@ impl DecodedSaySound {
     }
 }
 
+#[tracing::instrument]
 async fn decode(command: &SayCommand, file: &SoundFile) -> anyhow::Result<Memory> {
     let audio_filters = {
         let speed_multiplier = command.speed as f64 / 100.0;
@@ -152,6 +154,7 @@ async fn decode(command: &SayCommand, file: &SoundFile) -> anyhow::Result<Memory
     Ok(Memory::new(ffmpeg_out.stdout.into()).await?)
 }
 
+#[tracing::instrument]
 async fn process_say_commands(
     say_commands: SayCommands,
     ctx: &Context,
@@ -198,6 +201,7 @@ async fn process_say_commands(
     Ok(decoded_sounds)
 }
 
+#[tracing::instrument]
 pub async fn play_say_commands(
     say_commands: SayCommands,
     ctx: &Context,

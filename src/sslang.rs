@@ -112,6 +112,7 @@ impl IntoIterator for SayCommands {
 impl FromStr for SayCommands {
     type Err = Error<String>;
 
+    #[tracing::instrument]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match say_commands(s).finish() {
             Ok((_remaining, commands)) => Ok(Self(commands)),

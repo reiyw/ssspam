@@ -159,6 +159,7 @@ pub async fn leave_voice_channel(ctx: &Context, guild_id: GuildId) -> anyhow::Re
     Ok(())
 }
 
+#[tracing::instrument]
 pub async fn play_join_or_leave_sound(
     ctx: &Context,
     guild_id: GuildId,
@@ -488,6 +489,7 @@ pub async fn upload(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
+#[tracing::instrument]
 async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
     let mut count = 0;
     let storage = ctx

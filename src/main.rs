@@ -2,6 +2,8 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 
 use clap::Parser;
 use dotenvy::dotenv;
+use opentelemetry::KeyValue;
+use opentelemetry_sdk::{trace::Tracer, Resource};
 use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
@@ -17,6 +19,8 @@ use ssspambot::{
     SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
 };
 use tracing::{info, warn};
+use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 struct Handler;
 
@@ -63,6 +67,29 @@ impl EventHandler for Handler {
     }
 }
 
+fn init_tracer() -> Tracer {
+    let otlp_exporter = opentelemetry_otlp::new_exporter().tonic();
+    opentelemetry_otlp::new_pipeline()
+        .tracing()
+        .with_exporter(otlp_exporter)
+        .with_trace_config(
+            opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![KeyValue::new(
+                opentelemetry_semantic_conventions::resource::SERVICE_NAME,
+                "ssspambot",
+            )])),
+        )
+        .install_simple()
+        .expect("Failed to install opentelemetry pipeline")
+}
+
+fn init_tracing_subscriber() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(EnvFilter::from_default_env())
+        .with(OpenTelemetryLayer::new(init_tracer()))
+        .init();
+}
+
 #[derive(Parser)]
 #[clap(version, about)]
 struct Opt {
@@ -83,7 +110,7 @@ struct Opt {
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
-    tracing_subscriber::fmt::init();
+    init_tracing_subscriber();
 
     let opt = Opt::parse();
 
