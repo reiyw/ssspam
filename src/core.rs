@@ -164,7 +164,7 @@ impl TypeMapKey for GuildBroadcast {
     type Value = Arc<Mutex<Self>>;
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip_all)]
 pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     let guild = msg
         .guild(&ctx.cache)
