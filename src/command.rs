@@ -561,6 +561,8 @@ async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
 
     tokio::spawn(update_data_json(storage.read().dir.clone()));
 
+    storage.write().reload();
+
     clean_cache_impl(ctx).await?;
 
     Ok(count)

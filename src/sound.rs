@@ -143,6 +143,10 @@ impl SoundStorage {
         }
     }
 
+    pub fn reload(&mut self) {
+        *self = Self::load(&self.dir);
+    }
+
     pub fn files(&self) -> std::collections::btree_map::Values<String, SoundFile> {
         self.sounds.values()
     }
