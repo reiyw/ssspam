@@ -3,6 +3,7 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 use clap::Parser;
 use dotenvy::dotenv;
 use opentelemetry::KeyValue;
+use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{trace::Tracer, Resource};
 use parking_lot::{Mutex, RwLock};
 use serenity::{
@@ -67,8 +68,10 @@ impl EventHandler for Handler {
     }
 }
 
-fn init_tracer() -> Tracer {
-    let otlp_exporter = opentelemetry_otlp::new_exporter().tonic();
+fn init_tracer(otlp_endpoint: String) -> Tracer {
+    let otlp_exporter = opentelemetry_otlp::new_exporter()
+        .tonic()
+        .with_endpoint(otlp_endpoint);
     opentelemetry_otlp::new_pipeline()
         .tracing()
         .with_exporter(otlp_exporter)
@@ -82,11 +85,11 @@ fn init_tracer() -> Tracer {
         .expect("Failed to install opentelemetry pipeline")
 }
 
-fn init_tracing_subscriber() {
+fn init_tracing_subscriber(otlp_endpoint: String) {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
         .with(EnvFilter::from_default_env())
-        .with(OpenTelemetryLayer::new(init_tracer()))
+        .with(OpenTelemetryLayer::new(init_tracer(otlp_endpoint)))
         .init();
 }
 
@@ -104,15 +107,20 @@ struct Opt {
 
     #[clap(long, env, value_parser)]
     config_dir: PathBuf,
+
+    #[clap(long, env)]
+    otlp_endpoint: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
-    init_tracing_subscriber();
-
     let opt = Opt::parse();
+
+    if let Some(endpoint) = opt.otlp_endpoint {
+        init_tracing_subscriber(endpoint);
+    }
 
     let framework = StandardFramework::new()
         .group(&GENERAL_GROUP)
