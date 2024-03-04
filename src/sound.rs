@@ -27,6 +27,7 @@ struct Metadata {
     channel_count: u8,
     duration: Duration,
     updated_at: SystemTime,
+    artist: Option<String>,
 }
 
 impl Metadata {
@@ -46,11 +47,13 @@ impl Metadata {
         let channel_count = channel_counts.most_common()[0].0;
         let duration = data.duration;
         let updated_at = fs::metadata(path.as_ref())?.modified()?;
+        let artist = data.tag.map(|t| t.artist);
         Ok(Self {
             sample_rate_hz,
             channel_count,
             duration,
             updated_at,
+            artist,
         })
     }
 }
@@ -112,6 +115,13 @@ impl SoundFile {
         self.metadata
             .get_or_init(|| self.load_unchecked())
             .updated_at
+    }
+
+    pub fn artist(&self) -> Option<&str> {
+        self.metadata
+            .get_or_init(|| self.load_unchecked())
+            .artist
+            .as_deref()
     }
 
     fn load_unchecked(&self) -> Metadata {

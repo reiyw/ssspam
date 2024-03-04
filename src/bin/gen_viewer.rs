@@ -27,15 +27,12 @@ fn main() -> anyhow::Result<()> {
                 meta name="viewport" content="width=device-width, initial-scale=1" {}
                 title { "surfpvparena sounds" }
 
-                link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.2/css/bulma.min.css" {}
+                link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css" {}
                 link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma-slider@2.0.4/dist/css/bulma-slider.min.css" {}
                 script src="https://cdn.jsdelivr.net/npm/bulma-slider@2.0.4/dist/js/bulma-slider.min.js" {}
 
-                link rel="stylesheet" type="text/css" href="DataTables-1.11.3/css/dataTables.bulma.min.css" {}
-
-                script type="text/javascript" src="jQuery-3.6.0/jquery-3.6.0.min.js" {}
-                script type="text/javascript" src="DataTables-1.11.3/js/jquery.dataTables.min.js" {}
-                script type="text/javascript" src="DataTables-1.11.3/js/dataTables.bulma.js" {}
+                link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bm/jq-3.7.0/dt-2.0.1/datatables.min.css" {}
+                script type="text/javascript" src="https://cdn.datatables.net/v/bm/jq-3.7.0/dt-2.0.1/datatables.min.js" {}
 
                 script { (PreEscaped(r#"
                 function setVolume() {
@@ -47,16 +44,40 @@ fn main() -> anyhow::Result<()> {
                 }
 
                 $(document).ready(function () {
-                    $('#sounds').DataTable({
+                    const table = $('#sounds').DataTable({
                         'ajax': 'data.json',
                         'deferRender': true,
                         'columnDefs': [{
-                            'targets': 3,
+                            'targets': 4,
                             'render': function(data, type, row, meta) {
                                 return '<audio controls="controls" preload="none" src="' + data + '"></audio>';
                             },
-                        }]
+                        }],
+                        'initComplete': function () {
+                            this.api()
+                                .columns()
+                                .every(function () {
+                                    let column = this;
+                                    let title = column.footer().textContent;
+                                    if (title === 'Player') {
+                                        column.footer().innerHTML = '';
+                                        return;
+                                    }
+
+                                    let input = document.createElement('input');
+                                    input.classList.add('input', 'is-small');
+                                    input.placeholder = title;
+                                    column.footer().replaceChildren(input);
+
+                                    input.addEventListener('keyup', () => {
+                                        if (column.search() !== this.value) {
+                                            column.search(input.value).draw();
+                                        }
+                                    });
+                                });
+                        },
                     });
+
                     setVolume();
 
                     $('#sounds').on('DOMSubtreeModified', function () {
@@ -78,12 +99,22 @@ fn main() -> anyhow::Result<()> {
                     thead {
                         tr {
                             th { "Name" }
+                            th { "Artist" }
                             th { "Duration" }
                             th { "Updated" }
                             th { "Player" }
                         }
                     }
                     tbody {}
+                    tfoot {
+                        tr {
+                            th { "Name" }
+                            th { "Artist" }
+                            th { "Duration" }
+                            th { "Updated" }
+                            th { "Player" }
+                        }
+                    }
                 }
                 }
                 }
