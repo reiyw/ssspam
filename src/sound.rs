@@ -27,7 +27,7 @@ struct Metadata {
     channel_count: u8,
     duration: Duration,
     updated_at: SystemTime,
-    artist: Option<String>,
+    references: Vec<String>,
 }
 
 impl Metadata {
@@ -47,13 +47,29 @@ impl Metadata {
         let channel_count = channel_counts.most_common()[0].0;
         let duration = data.duration;
         let updated_at = fs::metadata(path.as_ref())?.modified()?;
-        let artist = data.tag.map(|t| t.artist);
+
+        let mut references = Vec::new();
+        if let Some(tag) = data.tag {
+            references.push(tag.artist);
+        }
+        for info in data.optional_info {
+            references.extend(info.composers);
+            references.extend(info.performers);
+        }
+        let mut references = references
+            .into_iter()
+            .map(|s| s.trim_matches(char::from(0)).to_string())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>();
+        references.sort_unstable();
+
         Ok(Self {
             sample_rate_hz,
             channel_count,
             duration,
             updated_at,
-            artist,
+            references,
         })
     }
 }
@@ -117,11 +133,11 @@ impl SoundFile {
             .updated_at
     }
 
-    pub fn artist(&self) -> Option<&str> {
-        self.metadata
+    pub fn references(&self) -> &[String] {
+        &self
+            .metadata
             .get_or_init(|| self.load_unchecked())
-            .artist
-            .as_deref()
+            .references
     }
 
     fn load_unchecked(&self) -> Metadata {

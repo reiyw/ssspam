@@ -29,7 +29,7 @@ pub fn gen_data_json_from_sound_dir<P: AsRef<Path>, Q: AsRef<Path>>(
         let src = format!("sound/{}.mp3", file.name);
         let row = (
             file.name.clone(),
-            file.artist().unwrap_or_default().to_string(),
+            file.references().join(", "),
             format!("{:.1}", file.duration().as_secs_f64()),
             updated_at.format("%Y-%m-%d").to_string(),
             src,

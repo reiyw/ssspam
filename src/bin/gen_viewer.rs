@@ -99,7 +99,7 @@ fn main() -> anyhow::Result<()> {
                     thead {
                         tr {
                             th { "Name" }
-                            th { "Artist" }
+                            th { "References" }
                             th { "Duration" }
                             th { "Updated" }
                             th { "Player" }
@@ -109,7 +109,7 @@ fn main() -> anyhow::Result<()> {
                     tfoot {
                         tr {
                             th { "Name" }
-                            th { "Artist" }
+                            th { "References" }
                             th { "Duration" }
                             th { "Updated" }
                             th { "Player" }
