@@ -3,7 +3,7 @@ use std::{fs::File, io::Write, path::PathBuf};
 use clap::Parser;
 use dotenvy::dotenv;
 use maud::{html, PreEscaped, DOCTYPE};
-use ssspambot::web::gen_data_json_from_sound_dir;
+use ssspam_bot::web::gen_data_json_from_sound_dir;
 
 #[derive(Parser)]
 #[clap(version, about)]

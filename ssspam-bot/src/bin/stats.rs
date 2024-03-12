@@ -6,7 +6,7 @@ use counter::Counter;
 use glob::glob;
 use itertools::Itertools;
 use serde::Deserialize;
-use ssspambot::SayCommands;
+use ssspam_bot::SayCommands;
 
 /// Prints sounds usage stats
 #[derive(Parser, Debug)]

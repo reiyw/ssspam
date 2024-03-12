@@ -14,7 +14,7 @@ use serenity::{
     prelude::GatewayIntents,
 };
 use songbird::{self, SerenityInit};
-use ssspambot::{
+use ssspam_bot::{
     command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
     process_message, sound::watch_sound_storage, ChannelManager, Configs, GuildBroadcast,
     SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP, OWNER_GROUP,

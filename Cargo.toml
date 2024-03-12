@@ -1,48 +1,5 @@
-[package]
-name = "ssspambot"
-version = "0.2.5"
-edition = "2021"
-default-run = "ssspambot"
-
-[dependencies]
-anyhow = "1.0.64"
-async_zip = { version = "0.0.11", features = ["deflate"] }
-chrono = "0.4.22"
-clap = { version = "4.1.4", features = ["derive", "env"] }
-clap-verbosity-flag = "1.0.1"
-cloud-storage = { version = "0.11.1", default-features = false, features = ["rustls-tls"] }
-counter = "0.5.6"
-csv = "1.1.6"
-derive_builder = "0.11.2"
-dotenvy = "0.15.6"
-glob = "0.3.0"
-humantime = "2.1.0"
-itertools = "0.10.5"
-maud = "0.23.0"
-moka = "0.9.4"
-mp3-metadata = "0.3.4"
-nom = "7.1.1"
-notify = { version = "5.0.0", default-features = false, features = ["macos_kqueue"] }
-once_cell = "1.14.0"
-opentelemetry = "0.21.0"
-opentelemetry-otlp = "0.14.0"
-opentelemetry-semantic-conventions = "0.13.0"
-opentelemetry_sdk = "0.21.2"
-parking_lot = "0.12.1"
-pickledb = "0.5.1"
-prettytable-rs = "0.10.0"
-rand = "0.8.5"
-rhai = "1.12.0"
-rhai-rand = "0.1.4"
-serde = { version = "1.0.144", features = ["derive"] }
-serde_json = "1.0.85"
-serenity = { version = "0.12.0", features = ["cache", "framework", "standard_framework", "voice", "http", "rustls_backend"]}
-songbird = { git = "https://github.com/reiyw/songbird", branch = "current", features = ["builtin-queue"] }
-strsim = "0.10.0"
-symphonia = { version = "0.5.3", features = ["pcm", "wav"] }
-systemstat = "0.2.3"
-tempfile = "3.3.0"
-tokio = { version = "1.21.0", features = ["macros", "rt-multi-thread", "signal"] }
-tracing = "0.1.40"
-tracing-opentelemetry = "0.22.0"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+[workspace]
+resolver = "2"
+members = [
+    "ssspam-bot",
+]

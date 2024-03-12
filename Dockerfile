@@ -28,8 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && update-ca-certificates
 
-COPY --from=builder /app/target/release/ssspambot /usr/local/bin
+COPY --from=builder /app/target/release/ssspam-bot /usr/local/bin
 COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin
 COPY --from=ffmpeg /usr/local/bin/ffprobe /usr/local/bin
 
-ENTRYPOINT ["/usr/local/bin/ssspambot"]
+ENTRYPOINT ["/usr/local/bin/ssspam-bot"]
