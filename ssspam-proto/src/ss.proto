@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package ssspam.ss;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+message SaySound {
+    // Name of the sound. This is the name of the file without the extension.
+    string name = 1;
+
+    // List of original sources of the sound, collected from the file's metadata.
+    repeated string sources = 2;
+
+    // Duration of the sound.
+    google.protobuf.Duration duration = 3;
+
+    // Timestamp of when the sound was created.
+    google.protobuf.Timestamp created = 4;
+}
+
+message Sounds {
+    // List of sounds.
+    repeated SaySound sounds = 1;
+}

@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::Context as _;
 use counter::Counter;
+use encoding_rs::Encoding;
 use glob::glob;
 use notify::{
     event::{CreateKind, ModifyKind, RenameMode},
@@ -61,8 +62,18 @@ impl Metadata {
             .map(|s| s.trim_matches(char::from(0)).to_string())
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
+            .map(|s| {
+                let result = charset_normalizer_rs::from_bytes(&s.as_bytes().to_vec(), None);
+                if let Some(best) = result.get_best() {
+                    let decoder = Encoding::for_label(best.encoding().as_bytes()).unwrap();
+                    decoder.decode(s.as_bytes()).0.into_owned()
+                } else {
+                    s
+                }
+            })
             .collect::<Vec<_>>();
         references.sort_unstable();
+        references.dedup();
 
         Ok(Self {
             sample_rate_hz,
@@ -146,6 +157,42 @@ impl SoundFile {
     }
 }
 
+impl TryFrom<SoundFile> for ssspam_proto::ss::SaySound {
+    type Error = anyhow::Error;
+
+    fn try_from(sound: SoundFile) -> Result<Self, Self::Error> {
+        Ok(ssspam_proto::ss::SaySound {
+            name: sound.name.to_string(),
+            sources: sound.references().to_vec(),
+            duration: Some(prost_types::Duration::try_from(sound.duration())?),
+            created: Some(sound.updated_at().into()),
+        })
+    }
+}
+
+trait ToSoundsProto {
+    fn to_sounds(self) -> ssspam_proto::ss::Sounds;
+}
+
+impl<I> ToSoundsProto for I
+where
+    I: Iterator<Item = SoundFile>,
+{
+    fn to_sounds(self) -> ssspam_proto::ss::Sounds {
+        let sounds: Vec<_> = self
+            .filter_map(|sound| {
+                ssspam_proto::ss::SaySound::try_from(sound)
+                    .map_err(|e| {
+                        warn!("Failed to convert a SoundFile to a ssspam.ss.SaySound proto: {e:?}");
+                        e
+                    })
+                    .ok()
+            })
+            .collect();
+        ssspam_proto::ss::Sounds { sounds }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SoundStorage {
     /// Lowercased name to [`Sound`].
@@ -173,7 +220,7 @@ impl SoundStorage {
         *self = Self::load(&self.dir);
     }
 
-    pub fn files(&self) -> std::collections::btree_map::Values<String, SoundFile> {
+    pub fn files(&self) -> impl Iterator<Item = &SoundFile> {
         self.sounds.values()
     }
 
@@ -313,7 +360,9 @@ mod test {
 
     #[test]
     fn test_sound() {
-        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sound");
+        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tests/sound");
         let sound = SoundFile::new_unchecked(sound_dir.join("sainou.mp3"));
         assert_eq!(sound.name, "sainou".to_string());
         assert_eq!(sound.path, sound_dir.join("sainou.mp3"));
@@ -323,7 +372,9 @@ mod test {
 
     #[test]
     fn test_sound_storage() {
-        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sound");
+        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tests/sound");
         let mut storage = SoundStorage::load(&sound_dir);
         assert_eq!(storage.len(), 3);
         assert_eq!(
@@ -352,7 +403,9 @@ mod test {
 
     #[test]
     fn test_calc_similarities() {
-        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sound");
+        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tests/sound");
         let storage = SoundStorage::load(sound_dir);
         let sims = storage.calc_similarities("dadei");
         assert_eq!(sims[0].1, storage.get("dadeisan").unwrap());
@@ -369,7 +422,9 @@ mod test {
         tokio::spawn(watch_sound_storage(Arc::clone(&storage)));
         tokio::time::sleep(DELAY).await;
 
-        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/sound");
+        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tests/sound");
 
         fs::copy(
             sound_dir.join("sainou.mp3"),
@@ -414,5 +469,15 @@ mod test {
             assert!(storage.get("sainou2").is_some());
             assert_eq!(storage.len(), 1);
         }
+    }
+
+    #[test]
+    fn test_to_sounds_proto() {
+        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tests/sound");
+        let storage = SoundStorage::load(sound_dir);
+        let sounds = storage.files().cloned().to_sounds();
+        assert_eq!(sounds.sounds.len(), 3);
     }
 }
