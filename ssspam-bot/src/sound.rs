@@ -170,7 +170,7 @@ impl TryFrom<SoundFile> for ssspam_proto::ss::SaySound {
     }
 }
 
-trait ToSoundsProto {
+pub trait ToSoundsProto {
     fn to_sounds(self) -> ssspam_proto::ss::Sounds;
 }
 
