@@ -1,10 +1,8 @@
-use std::fs;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 use clap::Parser;
 use prost::Message;
-use ssspam_bot::sound::SoundStorage;
-use ssspam_bot::sound::ToSoundsProto;
+use ssspam_bot::sound::{SoundStorage, ToSoundsProto};
 
 #[derive(Parser)]
 struct Args {
