@@ -6,7 +6,7 @@ COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder 
-RUN apt-get update && apt-get install -y --no-install-recommends libopus-dev
+RUN apt-get update && apt-get install -y --no-install-recommends libopus-dev protobuf-compiler
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
