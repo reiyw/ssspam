@@ -24,7 +24,7 @@ use tracing::{info, warn};
 use crate::{
     core::{process_from_string, ChannelUserManager},
     interpret_rhai,
-    web::update_data_json,
+    web::update_sounds_bin,
     ChannelManager, Configs, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache, SoundStorage,
 };
 
@@ -559,7 +559,7 @@ async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
         }
     }
 
-    tokio::spawn(update_data_json(storage.read().dir.clone()));
+    tokio::spawn(update_sounds_bin(storage.read().dir.clone()));
 
     storage.write().reload();
 
@@ -627,7 +627,7 @@ async fn delete_impl(ctx: &Context, mut args: Args) -> anyhow::Result<Vec<String
         }
     }
 
-    tokio::spawn(update_data_json(storage.read().dir.clone()));
+    tokio::spawn(update_sounds_bin(storage.read().dir.clone()));
 
     clean_cache_impl(ctx).await?;
 

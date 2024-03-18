@@ -7,10 +7,11 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
+use prost::Message;
 use serde::Serialize;
 use tempfile::tempdir;
 
-use crate::SoundStorage;
+use crate::{sound::ToSoundsProto, SoundStorage};
 
 #[derive(Debug, Serialize)]
 struct Data {
@@ -45,6 +46,17 @@ pub fn gen_data_json_from_sound_dir<P: AsRef<Path>, Q: AsRef<Path>>(
     Ok(())
 }
 
+pub fn gen_sounds_bin_from_sound_dir<P: AsRef<Path>, Q: AsRef<Path>>(
+    sound_dir: P,
+    out_file: Q,
+) -> anyhow::Result<()> {
+    let storage = SoundStorage::load(sound_dir);
+    let mut buf = Vec::new();
+    storage.files().cloned().to_sounds().encode(&mut buf)?;
+    fs::write(out_file, buf)?;
+    Ok(())
+}
+
 #[allow(clippy::future_not_send)]
 pub async fn update_data_json<P: AsRef<Path>>(sound_dir: P) -> anyhow::Result<()> {
     let temp_dir = tempdir()?;
@@ -57,6 +69,27 @@ pub async fn update_data_json<P: AsRef<Path>>(sound_dir: P) -> anyhow::Result<()
     client
         .object()
         .create("surfpvparena", data, "dist/data.json", "application/json")
+        .await?;
+    Ok(())
+}
+
+#[allow(clippy::future_not_send)]
+pub async fn update_sounds_bin<P: AsRef<Path>>(sound_dir: P) -> anyhow::Result<()> {
+    let temp_dir = tempdir()?;
+    let out_file = temp_dir.path().join("sounds.bin");
+
+    gen_sounds_bin_from_sound_dir(sound_dir, &out_file)?;
+
+    let data = fs::read(&out_file)?;
+    let client = cloud_storage::Client::default();
+    client
+        .object()
+        .create(
+            "surfpvparena",
+            data,
+            "dist/sounds.bin",
+            "application/octet-stream",
+        )
         .await?;
     Ok(())
 }
