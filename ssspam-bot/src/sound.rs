@@ -65,6 +65,13 @@ impl Metadata {
             .map(|s| {
                 let result = charset_normalizer_rs::from_bytes(&s.as_bytes().to_vec(), None);
                 if let Some(best) = result.get_best() {
+                    if !matches!(
+                        best.most_probably_language(),
+                        charset_normalizer_rs::entity::Language::Japanese
+                            | charset_normalizer_rs::entity::Language::English
+                    ) {
+                        return s;
+                    }
                     let decoder = Encoding::for_label(best.encoding().as_bytes()).unwrap();
                     decoder.decode(s.as_bytes()).0.into_owned()
                 } else {
