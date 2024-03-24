@@ -168,7 +168,7 @@ impl TryFrom<SoundFile> for ssspam_proto::ss::SaySound {
     type Error = anyhow::Error;
 
     fn try_from(sound: SoundFile) -> Result<Self, Self::Error> {
-        Ok(ssspam_proto::ss::SaySound {
+        Ok(Self {
             name: sound.name.to_string(),
             sources: sound.references().to_vec(),
             duration: Some(prost_types::Duration::try_from(sound.duration())?),
