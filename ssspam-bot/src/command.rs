@@ -6,19 +6,12 @@ use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use prettytable::{format, Table};
 use serenity::{
-    client::Context,
-    framework::standard::{
-        macros::{command, group},
-        Args, CommandResult,
-    },
-    model::{channel::Message, id::GuildId, prelude::UserId},
-    prelude::{Mentionable, TypeMapKey},
+    all::{Attachment, Context as SerenityContext},
+    model::{id::GuildId, prelude::UserId},
+    prelude::Mentionable,
 };
 use systemstat::{Platform, System};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::oneshot::{self, Receiver, Sender},
-};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{info, warn};
 
 use crate::{
@@ -28,109 +21,97 @@ use crate::{
     ChannelManager, Configs, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache, SoundStorage,
 };
 
-#[group]
-#[only_in(guilds)]
-#[commands(
-    join,
-    leave,
-    mute,
-    unmute,
-    stop,
-    clean_cache,
-    r,
-    s,
-    st,
-    uptime,
-    rhai,
-    config
-)]
-struct General;
+type Context<'a> = poise::Context<'a, (), anyhow::Error>;
 
-#[command]
-pub async fn join(ctx: &Context, msg: &Message) -> CommandResult {
-    if let Err(e) = join_impl(ctx, msg).await {
-        warn!("Error joining the channel: {e:?}");
-    }
+#[poise::command(prefix_command)]
+pub async fn help(
+    ctx: Context<'_>,
+    #[description = "Specific command to show help about"] command: Option<String>,
+) -> anyhow::Result<()> {
+    poise::builtins::help(ctx, command.as_deref(), Default::default()).await?;
     Ok(())
 }
 
-async fn join_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild = msg
-        .guild(&ctx.cache)
-        .context("Guild's ID was not found")?
-        .clone();
-    let voice_channel_id = guild
+#[poise::command(prefix_command, guild_only)]
+pub async fn join(ctx: Context<'_>) -> anyhow::Result<()> {
+    let voice_channel_id = ctx
+        .guild()
+        .context("Guild was not found")?
         .voice_states
-        .get(&msg.author.id)
+        .get(&ctx.author().id)
         .and_then(|voice_state| voice_state.channel_id);
     let voice_channel_id = match voice_channel_id {
         Some(c) => c,
         None => {
-            msg.reply(ctx, "Not in a voice channel").await?;
+            ctx.reply("Not in a voice channel").await?;
             return Ok(());
         }
     };
 
-    let manager = songbird::get(ctx)
+    let manager = songbird::get(ctx.as_ref())
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let handler_lock = manager.join(guild.id, voice_channel_id).await;
+    let handler_lock = manager
+        .join(
+            ctx.guild_id().context("Guild was not found")?,
+            voice_channel_id,
+        )
+        .await;
     if handler_lock.is_ok() {
-        msg.channel_id
-            .say(&ctx.http, &format!("Joined {}", voice_channel_id.mention()))
+        ctx.channel_id()
+            .say(&ctx, &format!("Joined {}", voice_channel_id.mention()))
             .await?;
         let channel_manager = ctx
+            .serenity_context()
             .data
             .read()
             .await
             .get::<ChannelManager>()
             .context("Could not get ChannelManager")?
             .clone();
-        channel_manager
-            .write()
-            .join(guild.id, voice_channel_id, msg.channel_id);
+        channel_manager.write().join(
+            ctx.guild_id().context("Guild was not found")?,
+            voice_channel_id,
+            ctx.channel_id(),
+        );
     } else {
-        msg.channel_id
-            .say(&ctx.http, "Error joining the channel")
+        ctx.channel_id()
+            .say(&ctx, "Error joining the channel")
             .await?;
     }
 
     Ok(())
 }
 
-#[command]
-pub async fn leave(ctx: &Context, msg: &Message) -> CommandResult {
-    if let Err(e) = leave_impl(ctx, msg).await {
-        warn!("Error leaving the channel: {e:?}");
-    }
-    Ok(())
-}
-
-async fn leave_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
-
-    let manager = songbird::get(ctx)
+#[poise::command(prefix_command, guild_only)]
+pub async fn leave(ctx: Context<'_>) -> anyhow::Result<()> {
+    let manager = songbird::get(ctx.as_ref())
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    manager.remove(guild_id).await?;
+    manager
+        .remove(ctx.guild_id().context("Guild was not found")?)
+        .await?;
 
     let channel_manager = ctx
+        .serenity_context()
         .data
         .read()
         .await
         .get::<ChannelManager>()
         .context("Could not get ChannelManager")?
         .clone();
-    channel_manager.write().leave(&guild_id);
+    channel_manager
+        .write()
+        .leave(&ctx.guild_id().context("Guild was not found")?);
 
     Ok(())
 }
 
-pub async fn leave_voice_channel(ctx: &Context, guild_id: GuildId) -> anyhow::Result<()> {
+pub async fn leave_voice_channel(ctx: &SerenityContext, guild_id: GuildId) -> anyhow::Result<()> {
     let channel_manager = ctx
         .data
         .read()
@@ -161,7 +142,7 @@ pub async fn leave_voice_channel(ctx: &Context, guild_id: GuildId) -> anyhow::Re
 
 #[tracing::instrument]
 pub async fn play_join_or_leave_sound(
-    ctx: &Context,
+    ctx: &SerenityContext,
     guild_id: GuildId,
     actioned_user: UserId,
 ) -> anyhow::Result<()> {
@@ -235,26 +216,17 @@ pub async fn play_join_or_leave_sound(
     Ok(())
 }
 
-#[command]
-pub async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
-    if let Err(e) = mute_impl(ctx, msg).await {
-        warn!("Failed to mute: {e:?}");
-    }
-    Ok(())
-}
-
-async fn mute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
-
-    let manager = songbird::get(ctx)
+#[poise::command(prefix_command, guild_only)]
+pub async fn mute(ctx: Context<'_>) -> anyhow::Result<()> {
+    let manager = songbird::get(ctx.as_ref())
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let handler_lock = match manager.get(guild_id) {
+    let handler_lock = match manager.get(ctx.guild_id().context("Guild was not found")?) {
         Some(handler) => handler,
         None => {
-            msg.reply(ctx, "Not in a voice channel").await?;
+            ctx.reply("Not in a voice channel").await?;
             return Ok(());
         }
     };
@@ -264,26 +236,17 @@ async fn mute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[command]
-pub async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
-    if let Err(e) = unmute_impl(ctx, msg).await {
-        warn!("Failed to unmute: {e:?}");
-    }
-    Ok(())
-}
-
-async fn unmute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
-
-    let manager = songbird::get(ctx)
+#[poise::command(prefix_command, guild_only)]
+pub async fn unmute(ctx: Context<'_>) -> anyhow::Result<()> {
+    let manager = songbird::get(ctx.as_ref())
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let handler_lock = match manager.get(guild_id) {
+    let handler_lock = match manager.get(ctx.guild_id().context("Guild was not found")?) {
         Some(handler) => handler,
         None => {
-            msg.reply(ctx, "Not in a voice channel").await?;
+            ctx.reply("Not in a voice channel").await?;
             return Ok(());
         }
     };
@@ -293,53 +256,42 @@ async fn unmute_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[command]
-pub async fn stop(ctx: &Context, msg: &Message) -> CommandResult {
-    if let Err(e) = stop_impl(ctx, msg).await {
-        warn!("Failed to stop: {e:?}");
-    }
-    Ok(())
-}
-
-async fn stop_impl(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
-    let manager = songbird::get(ctx)
+#[poise::command(prefix_command, guild_only)]
+pub async fn stop(ctx: Context<'_>) -> anyhow::Result<()> {
+    let manager = songbird::get(ctx.as_ref())
         .await
         .context("Songbird Voice client placed in at initialization.")?
         .clone();
 
-    let handler_lock = match manager.get(guild_id) {
+    let handler_lock = match manager.get(ctx.guild_id().context("Guild was not found")?) {
         Some(handler) => handler,
         None => {
-            msg.reply(ctx, "Not in a voice channel").await?;
+            ctx.reply("Not in a voice channel").await?;
             return Ok(());
         }
     };
     handler_lock.lock().await.stop();
 
     let guild_broadcast = ctx
+        .serenity_context()
         .data
         .read()
         .await
         .get::<GuildBroadcast>()
         .context("Could not get GuildBroadcast")?
         .clone();
-    let tx = guild_broadcast.lock().get_sender(guild_id);
+    let tx = guild_broadcast
+        .lock()
+        .get_sender(ctx.guild_id().context("Guild was not found")?);
     tx.send(OpsMessage::Stop)?;
 
     Ok(())
 }
 
-#[command]
-pub async fn clean_cache(ctx: &Context, _msg: &Message) -> CommandResult {
-    if let Err(e) = clean_cache_impl(ctx).await {
-        warn!("Failed to clean cache: {e:?}");
-    }
-    Ok(())
-}
-
-async fn clean_cache_impl(ctx: &Context) -> anyhow::Result<()> {
-    ctx.data
+#[poise::command(prefix_command)]
+pub async fn clean_cache(ctx: Context<'_>) -> anyhow::Result<()> {
+    ctx.serenity_context()
+        .data
         .read()
         .await
         .get::<SaySoundCache>()
@@ -350,22 +302,10 @@ async fn clean_cache_impl(ctx: &Context) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[command]
-pub async fn r(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    match r_impl(ctx, args).await {
-        Ok(say_commands) => {
-            msg.channel_id
-                .say(&ctx.http, say_commands.to_string())
-                .await
-                .ok();
-        }
-        Err(e) => warn!("Failed r: {e:?}"),
-    }
-    Ok(())
-}
-
-async fn r_impl(ctx: &Context, args: Args) -> anyhow::Result<SayCommands> {
+#[poise::command(prefix_command)]
+pub async fn r(ctx: Context<'_>, #[rest] rest: Option<String>) -> anyhow::Result<()> {
     let storage = ctx
+        .serenity_context()
         .data
         .read()
         .await
@@ -373,126 +313,110 @@ async fn r_impl(ctx: &Context, args: Args) -> anyhow::Result<SayCommands> {
         .context("Could not get SoundStorage")?
         .clone();
     let file = storage.read().get_random().context("Has no sound file")?;
-    let cmds = SayCommands::from_str(&format!("{} {}", file.name, args.rest()))?;
-    Ok(cmds)
-}
-
-#[command]
-pub async fn s(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    if let Some(arg) = args.current() {
-        let names: Vec<_> = {
-            let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
-            let sims = storage.read().calc_similarities(arg);
-            let names: Vec<_> = sims
-                .iter()
-                .take(20)
-                .filter(|(s, _)| s > &0.85)
-                .map(|(_, f)| f.name.clone())
-                .collect();
-            if names.len() < 10 {
-                sims.iter().take(10).map(|(_, f)| f.name.clone()).collect()
-            } else {
-                names
-            }
-        };
-        msg.channel_id.say(&ctx.http, names.join(", ")).await.ok();
-    }
-    Ok(())
-}
-
-#[command]
-pub async fn st(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    if let Some(arg) = args.current() {
-        let mut table = Table::new();
-
-        {
-            let storage = ctx.data.read().await.get::<SoundStorage>().unwrap().clone();
-            let sims = storage.read().calc_similarities(arg);
-
-            table.set_format(*format::consts::FORMAT_CLEAN);
-            table.set_titles(row!["Name", "Dur", "Updated"]);
-
-            for (_, file) in sims.iter().take(10) {
-                let updated_at: DateTime<Utc> = file.updated_at().into();
-                table.add_row(row![
-                    file.name,
-                    format!("{:.1}", file.duration().as_secs_f64()),
-                    updated_at.format("%Y-%m-%d") // updated_at.format("%Y-%m-%d %T")
-                ]);
-            }
+    match SayCommands::from_str(&format!("{} {}", file.name, rest.unwrap_or_default())) {
+        Ok(say_commands) => {
+            ctx.say(say_commands.to_string()).await.ok();
         }
-
-        msg.channel_id
-            .say(&ctx.http, format!("```\n{table}\n```"))
-            .await
-            .ok();
+        Err(e) => warn!("Failed r: {e:?}"),
     }
+
     Ok(())
 }
 
-#[command]
-#[only_in(guilds)]
-async fn uptime(ctx: &Context, msg: &Message) -> CommandResult {
+#[poise::command(prefix_command)]
+pub async fn s(ctx: Context<'_>, query: String) -> anyhow::Result<()> {
+    let names: Vec<_> = {
+        let storage = ctx
+            .serenity_context()
+            .data
+            .read()
+            .await
+            .get::<SoundStorage>()
+            .unwrap()
+            .clone();
+        let sims = storage.read().calc_similarities(query);
+        let names: Vec<_> = sims
+            .iter()
+            .take(20)
+            .filter(|(s, _)| s > &0.85)
+            .map(|(_, f)| f.name.clone())
+            .collect();
+        if names.len() < 10 {
+            sims.iter().take(10).map(|(_, f)| f.name.clone()).collect()
+        } else {
+            names
+        }
+    };
+    ctx.say(names.join(", ")).await.ok();
+    Ok(())
+}
+
+#[poise::command(prefix_command)]
+pub async fn st(ctx: Context<'_>, query: String) -> anyhow::Result<()> {
+    let storage = ctx
+        .serenity_context()
+        .data
+        .read()
+        .await
+        .get::<SoundStorage>()
+        .unwrap()
+        .clone();
+    let sims = storage.read().calc_similarities(query);
+
+    let mut table = Table::new();
+    table.set_format(*format::consts::FORMAT_CLEAN);
+    table.set_titles(row!["Name", "Dur", "Updated"]);
+
+    for (_, file) in sims.iter().take(10) {
+        let updated_at: DateTime<Utc> = file.updated_at().into();
+        table.add_row(row![
+            file.name,
+            format!("{:.1}", file.duration().as_secs_f64()),
+            updated_at.format("%Y-%m-%d") // updated_at.format("%Y-%m-%d %T")
+        ]);
+    }
+
+    ctx.say(format!("```\n{table}\n```")).await.ok();
+    Ok(())
+}
+
+#[poise::command(prefix_command)]
+pub async fn uptime(ctx: Context<'_>) -> anyhow::Result<()> {
     let sys = System::new();
-    msg.channel_id
-        .say(
-            &ctx.http,
-            humantime::format_duration(sys.uptime().unwrap()).to_string(),
-        )
+    ctx.say(humantime::format_duration(sys.uptime().unwrap()).to_string())
         .await
         .ok();
     Ok(())
 }
 
-#[command]
-pub async fn rhai(ctx: &Context, msg: &Message) -> CommandResult {
-    let source = msg.content[6..].trim().trim_matches('`').to_owned();
+#[poise::command(prefix_command)]
+pub async fn rhai(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()> {
+    let source = rest.trim().trim_matches('`').to_owned();
     dbg!(&source);
     let task = tokio::task::spawn_blocking(move || interpret_rhai(&source));
     match tokio::time::timeout(Duration::from_secs(1), task).await {
         Ok(Ok(Ok(say_commands))) => {
-            msg.channel_id.say(&ctx.http, say_commands).await.ok();
+            ctx.say(say_commands).await.ok();
         }
         Err(e) => {
-            msg.channel_id.say(&ctx.http, e.to_string()).await.ok();
+            ctx.say(e.to_string()).await.ok();
         }
         Ok(Err(e)) => {
-            msg.channel_id.say(&ctx.http, e.to_string()).await.ok();
+            ctx.say(e.to_string()).await.ok();
         }
         Ok(Ok(Err(e))) => {
-            msg.channel_id.say(&ctx.http, e.to_string()).await.ok();
-        }
-    }
-    Ok(())
-}
-
-#[group]
-#[owners_only]
-#[only_in(guilds)]
-#[commands(upload, delete, shutdown)]
-struct Owner;
-
-#[command]
-pub async fn upload(ctx: &Context, msg: &Message) -> CommandResult {
-    match upload_impl(ctx, msg).await {
-        Ok(n) => {
-            msg.reply(ctx, format!("Successfully uploaded {n} sounds"))
-                .await
-                .ok();
-        }
-        Err(e) => {
-            msg.reply(ctx, format!("Failed to upload: {e:?}"))
-                .await
-                .ok();
+            ctx.say(e.to_string()).await.ok();
         }
     }
     Ok(())
 }
 
 #[tracing::instrument]
-async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
+#[poise::command(prefix_command, owners_only)]
+pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<()> {
     let mut count = 0;
     let storage = ctx
+        .serenity_context()
         .data
         .read()
         .await
@@ -501,7 +425,7 @@ async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
         .clone();
     let client = cloud_storage::Client::default();
 
-    for attachment in &msg.attachments {
+    for attachment in files {
         let content = attachment.download().await?;
 
         if attachment.filename.ends_with(".zip") {
@@ -563,46 +487,18 @@ async fn upload_impl(ctx: &Context, msg: &Message) -> anyhow::Result<u32> {
 
     storage.write().reload();
 
-    clean_cache_impl(ctx).await?;
+    clean_cache();
 
-    Ok(count)
-}
-
-#[command]
-pub async fn delete(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    if args.is_empty() {
-        msg.reply(
-            ctx,
-            "Specify one or more saysound names, separated by spaces.",
-        )
+    ctx.reply(format!("Successfully uploaded {count} sounds"))
         .await
         .ok();
-        return Ok(());
-    }
-
-    match delete_impl(ctx, args).await {
-        Ok(deleted) if !deleted.is_empty() => {
-            msg.reply(ctx, format!("Deleted: {}", deleted.join(", ")))
-                .await
-                .ok();
-        }
-        Ok(deleted) if deleted.is_empty() => {
-            msg.reply(ctx, "The given saysounds were not found")
-                .await
-                .ok();
-        }
-        Ok(_) => unreachable!(),
-        Err(e) => {
-            msg.reply(ctx, format!("Failed to delete: {e:?}"))
-                .await
-                .ok();
-        }
-    }
     Ok(())
 }
 
-async fn delete_impl(ctx: &Context, mut args: Args) -> anyhow::Result<Vec<String>> {
+#[poise::command(prefix_command, owners_only)]
+pub async fn delete(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()> {
     let storage = ctx
+        .serenity_context()
         .data
         .read()
         .await
@@ -612,7 +508,7 @@ async fn delete_impl(ctx: &Context, mut args: Args) -> anyhow::Result<Vec<String
     let client = cloud_storage::Client::default();
     let mut deleted = Vec::new();
 
-    for name in args.iter::<String>().flatten() {
+    for name in rest.split_whitespace() {
         let sound_file = { storage.read().get(name) };
         if let Some(file) = sound_file {
             if fs::remove_file(&file.path).is_ok()
@@ -629,101 +525,88 @@ async fn delete_impl(ctx: &Context, mut args: Args) -> anyhow::Result<Vec<String
 
     tokio::spawn(update_sounds_bin(storage.read().dir.clone()));
 
-    clean_cache_impl(ctx).await?;
+    clean_cache();
 
-    Ok(deleted)
-}
-
-pub struct ShutdownChannel {
-    tx: Sender<()>,
-}
-
-impl ShutdownChannel {
-    pub fn new() -> (Receiver<()>, Self) {
-        let (tx, rx) = oneshot::channel();
-        (rx, Self { tx })
-    }
-
-    fn send_shutdown(self) {
-        self.tx.send(()).unwrap();
-    }
-}
-
-impl TypeMapKey for ShutdownChannel {
-    type Value = Self;
-}
-
-#[command]
-pub async fn shutdown(ctx: &Context, _msg: &Message) -> CommandResult {
-    let channel = ctx.data.write().await.remove::<ShutdownChannel>().unwrap();
-    channel.send_shutdown();
-    Ok(())
-}
-
-#[command]
-pub async fn config(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    match config_impl(ctx, msg, args).await {
-        Ok(()) => {}
-        Err(e) => {
-            msg.channel_id
-                .say(&ctx.http, format!("Error: {e}"))
-                .await
-                .ok();
-        }
+    if deleted.is_empty() {
+        ctx.reply("The given saysounds were not found").await.ok();
+    } else {
+        ctx.reply(format!("Deleted: {}", deleted.join(", ")))
+            .await
+            .ok();
     }
     Ok(())
 }
 
 #[allow(clippy::single_match)]
-async fn config_impl(ctx: &Context, msg: &Message, args: Args) -> anyhow::Result<()> {
+#[poise::command(prefix_command, guild_only)]
+pub async fn config(
+    ctx: Context<'_>,
+    action: String,
+    key: Option<String>,
+    value: Option<String>,
+) -> anyhow::Result<()> {
     let configs = ctx
+        .serenity_context()
         .data
         .read()
         .await
         .get::<Configs>()
         .context("Could not get Configs")?
         .clone();
-    let guild_id = msg.guild_id.context("Guild's ID was not found")?;
-    match args.clone().current() {
-        Some("set") => match args.clone().advance().current() {
-            Some(key) => match args.clone().advance().advance().current() {
+    match action.as_str() {
+        "set" => match key {
+            Some(key) => match value {
                 Some(value) => {
                     let old_value = {
                         let mut configs = configs.write();
-                        let old_value = configs.get(&guild_id, key, &msg.author.id);
-                        configs.set(&guild_id, key, value, &msg.author.id)?;
+                        let old_value = configs.get(
+                            &ctx.guild_id().context("Guild was not found")?,
+                            &key,
+                            &ctx.author().id,
+                        );
+                        configs.set(
+                            &ctx.guild_id().context("Guild was not found")?,
+                            &key,
+                            &value,
+                            &ctx.author().id,
+                        )?;
                         old_value
                     };
                     if let Some(old_value) = old_value {
-                        msg.reply(ctx, format!("Set {key}: {old_value} -> {value}"))
+                        ctx.reply(format!("Set {key}: {old_value} -> {value}"))
                             .await?;
                     } else {
-                        msg.reply(ctx, format!("Set {key}: {value}")).await?;
+                        ctx.reply(format!("Set {key}: {value}")).await?;
                     }
                 }
                 None => {}
             },
             None => {}
         },
-        Some("remove") => match args.clone().advance().current() {
+        "remove" => match key {
             Some(key) => {
                 let old_value = {
                     let mut configs = configs.write();
-                    let old_value = configs.get(&guild_id, key, &msg.author.id);
-                    configs.remove(&guild_id, key, &msg.author.id)?;
+                    let old_value = configs.get(
+                        &ctx.guild_id().context("Guild was not found")?,
+                        &key,
+                        &ctx.author().id,
+                    );
+                    configs.remove(
+                        &ctx.guild_id().context("Guild was not found")?,
+                        &key,
+                        &ctx.author().id,
+                    )?;
                     old_value
                 };
                 if let Some(old_value) = old_value {
-                    msg.reply(ctx, format!("Removed {key}: {old_value}"))
-                        .await?;
+                    ctx.reply(format!("Removed {key}: {old_value}")).await?;
                 }
             }
             None => {}
         },
-        Some("list") => {}
-        Some(_sub_cmd) => {}
-        None => {}
+        "list" => {}
+        _ => {}
     }
-
     Ok(())
 }

@@ -9,15 +9,14 @@ use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
-    framework::{standard::Configuration, StandardFramework},
     model::{channel::Message, gateway::Ready, id::GuildId, voice::VoiceState},
     prelude::GatewayIntents,
 };
 use songbird::{self, SerenityInit};
 use ssspam_bot::{
-    command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
+    command, command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
     process_message, sound::watch_sound_storage, ChannelManager, Configs, GuildBroadcast,
-    SaySoundCache, ShutdownChannel, SoundStorage, GENERAL_GROUP, OWNER_GROUP,
+    SaySoundCache, SoundStorage,
 };
 use tracing::{info, warn};
 use tracing_opentelemetry::OpenTelemetryLayer;
@@ -122,18 +121,38 @@ async fn main() -> anyhow::Result<()> {
         init_tracing_subscriber(endpoint);
     }
 
-    let framework = StandardFramework::new()
-        .group(&GENERAL_GROUP)
-        .group(&OWNER_GROUP);
-    framework.configure(
-        Configuration::new()
-            .prefix(opt.command_prefix)
-            .owners(HashSet::from([
-                // TODO: Use Discord's team feature
+    let framework = poise::Framework::builder()
+        .setup(|_, _, _: &poise::Framework<(), anyhow::Error>| Box::pin(async move { Ok(()) }))
+        .options(poise::FrameworkOptions {
+            prefix_options: poise::PrefixFrameworkOptions {
+                prefix: Some(opt.command_prefix.clone()),
+                ..Default::default()
+            },
+            commands: vec![
+                command::clean_cache(),
+                command::config(),
+                command::delete(),
+                command::help(),
+                command::join(),
+                command::leave(),
+                command::mute(),
+                command::r(),
+                command::rhai(),
+                command::s(),
+                command::st(),
+                command::stop(),
+                command::unmute(),
+                command::upload(),
+                command::uptime(),
+            ],
+            owners: HashSet::from([
+                // TODO: Make this configurable
                 310620137608970240.into(), // auzen
                 342903795380125698.into(), // nicotti
-            ])),
-    );
+            ]),
+            ..Default::default()
+        })
+        .build();
 
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
 
@@ -146,7 +165,6 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Error while creating client");
 
-    let shutdown_receiver;
     {
         let mut data = client.data.write().await;
 
@@ -167,10 +185,6 @@ async fn main() -> anyhow::Result<()> {
 
         data.insert::<GuildBroadcast>(Arc::new(Mutex::new(GuildBroadcast::new())));
 
-        let (rx, channel) = ShutdownChannel::new();
-        data.insert::<ShutdownChannel>(channel);
-        shutdown_receiver = rx;
-
         data.insert::<Configs>(Arc::new(RwLock::new(configs)));
     }
 
@@ -180,7 +194,6 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async move {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
-            _ = shutdown_receiver => {},
         }
         shard_manager.shutdown_all().await;
     });
