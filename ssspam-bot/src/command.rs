@@ -290,8 +290,12 @@ pub async fn stop(ctx: Context<'_>) -> anyhow::Result<()> {
 
 #[poise::command(prefix_command)]
 pub async fn clean_cache(ctx: Context<'_>) -> anyhow::Result<()> {
-    ctx.serenity_context()
-        .data
+    clean_cache_inner(ctx.serenity_context()).await?;
+    Ok(())
+}
+
+async fn clean_cache_inner(ctx: &SerenityContext) -> anyhow::Result<()> {
+    ctx.data
         .read()
         .await
         .get::<SaySoundCache>()
@@ -487,7 +491,7 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
 
     storage.write().reload();
 
-    clean_cache();
+    clean_cache_inner(ctx.serenity_context()).await?;
 
     ctx.reply(format!("Successfully uploaded {count} sounds"))
         .await
@@ -525,7 +529,7 @@ pub async fn delete(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()
 
     tokio::spawn(update_sounds_bin(storage.read().dir.clone()));
 
-    clean_cache();
+    clean_cache_inner(ctx.serenity_context()).await?;
 
     if deleted.is_empty() {
         ctx.reply("The given saysounds were not found").await.ok();
