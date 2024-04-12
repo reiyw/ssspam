@@ -16,8 +16,8 @@ FROM debian:bullseye-slim AS ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends wget xz-utils \
     && wget -q --no-check-certificate https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
     && tar xf ffmpeg-master-latest-linux64-gpl.tar.xz \
-    && mv ffmpeg-n6.1-latest-linux64-gpl-6.1/bin/ffmpeg /usr/local/bin/ \
-    && mv ffmpeg-n6.1-latest-linux64-gpl-6.1/bin/ffprobe /usr/local/bin/
+    && mv ffmpeg-master-latest-linux64-gpl/bin/ffmpeg /usr/local/bin/ \
+    && mv ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/
 
 FROM debian:bullseye-slim AS runtime
 WORKDIR /app
