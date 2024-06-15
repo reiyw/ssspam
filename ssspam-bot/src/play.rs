@@ -41,11 +41,11 @@ impl SaySoundCache {
         self.cache.get(say_command)
     }
 
-    fn insert(&mut self, say_command: SayCommand, say_sound: Arc<DecodedSaySound>) {
+    fn insert(&self, say_command: SayCommand, say_sound: Arc<DecodedSaySound>) {
         self.cache.insert(say_command, say_sound);
     }
 
-    pub fn clean(&mut self) {
+    pub fn clean(&self) {
         self.cache.invalidate_all();
     }
 }
@@ -133,7 +133,7 @@ async fn decode(command: &SayCommand, file: &SoundFile) -> anyhow::Result<Memory
             "-t",
             &t_opt_value,
             "-i",
-            &file.path.to_str().unwrap(),
+            (file.path.to_str().unwrap()),
             "-f",
             "wav",
             "-ac",

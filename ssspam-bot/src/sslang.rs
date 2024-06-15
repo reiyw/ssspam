@@ -1,4 +1,4 @@
-use std::{fmt::Write, str::FromStr};
+use std::str::FromStr;
 
 use nom::{
     branch::alt,
@@ -48,35 +48,34 @@ impl Default for SayCommand {
     }
 }
 
-impl ToString for SayCommand {
-    fn to_string(&self) -> String {
-        let mut s = self.name.clone();
+impl std::fmt::Display for SayCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
         if self.speed != 100 {
-            write!(s, " {}", self.speed).unwrap();
+            write!(f, " {}", self.speed)?;
         }
         if self.pitch != 100 {
-            write!(s, " p{}", self.pitch).unwrap();
+            write!(f, " p{}", self.pitch)?;
         }
         if self.wait != 0 {
-            write!(s, " w{:.1}", (self.wait as f64) / 1000.0).unwrap();
+            write!(f, " w{:.1}", (self.wait as f64) / 1000.0)?;
         }
         if self.start != 0 {
-            write!(s, " s{:.1}", (self.start as f64) / 1000.0).unwrap();
+            write!(f, " s{:.1}", (self.start as f64) / 1000.0)?;
         }
         if let Some(dur) = self.duration {
-            write!(s, " d{:.1}", (dur as f64) / 1000.0).unwrap();
+            write!(f, " d{:.1}", (dur as f64) / 1000.0)?;
         }
         if self.stop {
-            s += " s";
+            write!(f, " s")?;
         }
         if let Some(ref af) = self.audio_filter {
-            write!(s, " af={af}").unwrap();
+            write!(f, " af={af}")?;
         }
         match self.action {
-            Action::Synthesize => s += "; ",
-            Action::Concat => s += "| ",
+            Action::Synthesize => write!(f, "; "),
+            Action::Concat => write!(f, "| "),
         }
-        s
     }
 }
 
@@ -124,11 +123,11 @@ impl FromStr for SayCommands {
     }
 }
 
-impl ToString for SayCommands {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for SayCommands {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s: String = self.iter().map(|c| c.to_string()).collect();
         s.truncate(s.len() - 2);
-        s
+        write!(f, "{}", s)
     }
 }
 
