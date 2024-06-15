@@ -121,9 +121,10 @@ pub async fn leave_voice_channel(ctx: &SerenityContext, guild_id: GuildId) -> an
         .clone();
     let bots_voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
     if let Some(bots_voice_channel_id) = bots_voice_channel_id {
-        let channel = ctx
-            .cache
-            .channel(bots_voice_channel_id)
+        let guild = ctx.cache.guild(guild_id).unwrap().clone();
+        let channel = guild
+            .channels
+            .get(&bots_voice_channel_id)
             .context("Failed to get GuildChannel")?
             .clone();
         let members = channel.members(&ctx.cache)?;
@@ -156,9 +157,10 @@ pub async fn play_join_or_leave_sound(
             .clone();
         let bots_voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
         if let Some(bots_voice_channel_id) = bots_voice_channel_id {
-            let channel = ctx
-                .cache
-                .channel(bots_voice_channel_id)
+            let guild = ctx.cache.guild(guild_id).unwrap().clone();
+            let channel = guild
+                .channels
+                .get(&bots_voice_channel_id)
                 .context("Failed to get GuildChannel")?
                 .clone();
             let members = channel.members(&ctx.cache)?;
