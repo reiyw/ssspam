@@ -45,7 +45,7 @@ serenity = { version = "0.12.2", features = ["voice"] }
 songbird = { git = "https://github.com/reiyw/songbird", branch = "current", features = ["builtin-queue"] }
 ssspam-proto = { path = "../ssspam-proto" }
 strsim = "0.10.0"
-symphonia = { version = "0.5.3", features = ["pcm", "wav"] }
+symphonia = { version = "0.5.4", features = ["pcm", "wav"] }
 systemstat = "0.2.3"
 tempfile = "3.3.0"
 tokio = { version = "1.21.0", features = ["macros", "rt-multi-thread", "signal"] }
