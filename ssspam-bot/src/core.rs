@@ -22,6 +22,7 @@ use tokio::sync::{
     broadcast,
     broadcast::{Receiver, Sender},
 };
+use tracing::Instrument;
 
 use crate::{play_say_commands, SayCommands};
 
@@ -166,28 +167,41 @@ impl TypeMapKey for GuildBroadcast {
 
 #[tracing::instrument(skip_all)]
 pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-    let guild = msg
-        .guild(&ctx.cache)
-        .context("Guild's ID was not found")?
-        .clone();
+    let get_guild_span = tracing::info_span!("get_guild");
+    let guild = get_guild_span.in_scope(|| {
+        msg.guild(&ctx.cache)
+            .expect("Guild's ID was not found")
+            .clone()
+    });
 
+    let get_channel_manager_span = tracing::info_span!("get_channel_manager");
     let channel_manager = ctx
         .data
         .read()
+        .instrument(get_channel_manager_span)
         .await
         .get::<ChannelManager>()
         .context("Could not get ChannelManager")?
         .clone();
 
-    if channel_manager.read().get_text_channel_id(&guild.id) != Some(msg.channel_id) {
+    let get_text_channel_id_span = tracing::info_span!("get_text_channel_id");
+    let text_channel_id = get_text_channel_id_span.in_scope(|| {
+        channel_manager
+            .read()
+            .get_text_channel_id(&guild.id)
+            .expect("Text channel ID was not found")
+    });
+    if text_channel_id != msg.channel_id {
         return Ok(());
     }
 
-    let authors_voice_channel_id = guild
-        .voice_states
-        .get(&msg.author.id)
-        .and_then(|voice_state| voice_state.channel_id);
-
+    let get_voice_channel_id_span = tracing::info_span!("get_voice_channel_id");
+    let authors_voice_channel_id = get_voice_channel_id_span.in_scope(|| {
+        guild
+            .voice_states
+            .get(&msg.author.id)
+            .and_then(|voice_state| voice_state.channel_id)
+    });
     if channel_manager.read().get_voice_channel_id(&guild.id) != authors_voice_channel_id {
         return Ok(());
     }
