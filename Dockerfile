@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1-bullseye AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1-bookworm AS chef
 WORKDIR /app
 
 FROM chef AS planner
@@ -12,14 +12,14 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM debian:bullseye-slim AS ffmpeg
+FROM debian:bookworm-slim AS ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends wget xz-utils \
     && wget -q --no-check-certificate https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz \
     && tar xf ffmpeg-master-latest-linux64-gpl.tar.xz \
     && mv ffmpeg-master-latest-linux64-gpl/bin/ffmpeg /usr/local/bin/ \
     && mv ffmpeg-master-latest-linux64-gpl/bin/ffprobe /usr/local/bin/
 
-FROM debian:bullseye-slim AS runtime
+FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libopus-dev \
