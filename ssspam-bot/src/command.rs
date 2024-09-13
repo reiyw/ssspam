@@ -111,6 +111,7 @@ pub async fn leave(ctx: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tracing::instrument]
 pub async fn leave_voice_channel(ctx: &SerenityContext, guild_id: GuildId) -> anyhow::Result<()> {
     let channel_manager = ctx
         .data

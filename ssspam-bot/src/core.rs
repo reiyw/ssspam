@@ -243,6 +243,7 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
     }
 }
 
+#[tracing::instrument]
 pub async fn process_from_string(
     ctx: &Context,
     guild_id: GuildId,
