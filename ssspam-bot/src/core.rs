@@ -173,6 +173,7 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
             .expect("Guild's ID was not found")
             .clone()
     });
+    drop(get_guild_span);
 
     let get_channel_manager_span = tracing::info_span!("get_channel_manager");
     let channel_manager = ctx
@@ -191,6 +192,7 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
             .get_text_channel_id(&guild.id)
             .expect("Text channel ID was not found")
     });
+    drop(get_text_channel_id_span);
     if text_channel_id != msg.channel_id {
         return Ok(());
     }
@@ -202,6 +204,7 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
             .get(&msg.author.id)
             .and_then(|voice_state| voice_state.channel_id)
     });
+    drop(get_voice_channel_id_span);
     if channel_manager.read().get_voice_channel_id(&guild.id) != authors_voice_channel_id {
         return Ok(());
     }
