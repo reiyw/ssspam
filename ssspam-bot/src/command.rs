@@ -203,20 +203,18 @@ pub async fn play_join_or_leave_sound(
     }
 
     // アクションを起こしたユーザーが今いなくて以前いたなら leave したことになる
-
-    // FIXME: hang up
-    // let mut diff = old_users.difference(&current_users);
-    // if diff.contains(&actioned_user) {
-    //     {
-    //         let mut lock = channel_user_manager.lock();
-    //         lock.remove(&guild_id, &actioned_user);
-    //     }
-    //     let sound = { configs.read().get_leavesound(&actioned_user) };
-    //     if let Some(sound) = sound {
-    //         info!(sound, "playing leavesound");
-    //         process_from_string(ctx, guild_id, sound.as_str()).await?
-    //     }
-    // }
+    let mut diff = old_users.difference(&current_users);
+    if diff.contains(&actioned_user) {
+        {
+            let mut lock = channel_user_manager.lock();
+            lock.remove(&guild_id, &actioned_user);
+        }
+        let sound = { configs.read().get_leavesound(&actioned_user) };
+        if let Some(sound) = sound {
+            info!(sound, "playing leavesound");
+            process_from_string(ctx, guild_id, sound.as_str()).await?
+        }
+    }
 
     Ok(())
 }
