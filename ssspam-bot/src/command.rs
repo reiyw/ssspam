@@ -199,6 +199,7 @@ pub async fn play_join_or_leave_sound(
             info!(sound, "playing joinsound");
             process_from_string(ctx, guild_id, sound.as_str()).await?
         }
+        return Ok(());
     }
 
     // アクションを起こしたユーザーが今いなくて以前いたなら leave したことになる
