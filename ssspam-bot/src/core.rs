@@ -111,7 +111,7 @@ impl ChannelUserManager {
 }
 
 impl TypeMapKey for ChannelUserManager {
-    type Value = Arc<RwLock<Self>>;
+    type Value = Arc<Mutex<Self>>;
 }
 
 #[derive(Debug)]

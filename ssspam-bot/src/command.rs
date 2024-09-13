@@ -177,7 +177,7 @@ pub async fn play_join_or_leave_sound(
         .get::<ChannelUserManager>()
         .context("Could not get ChannelUserManager")?
         .clone();
-    let old_users = channel_user_manager.read().get(&guild_id);
+    let old_users = channel_user_manager.lock().get(&guild_id);
 
     let configs = ctx
         .data
@@ -191,7 +191,7 @@ pub async fn play_join_or_leave_sound(
     let mut diff = current_users.difference(&old_users);
     if diff.contains(&actioned_user) {
         {
-            let mut lock = channel_user_manager.write();
+            let mut lock = channel_user_manager.lock();
             lock.add(guild_id, actioned_user);
         }
         let sound = { configs.read().get_joinsound(&actioned_user) };
@@ -206,7 +206,7 @@ pub async fn play_join_or_leave_sound(
     let mut diff = old_users.difference(&current_users);
     if diff.contains(&actioned_user) {
         {
-            let mut lock = channel_user_manager.write();
+            let mut lock = channel_user_manager.lock();
             lock.remove(&guild_id, &actioned_user);
         }
         let sound = { configs.read().get_leavesound(&actioned_user) };
