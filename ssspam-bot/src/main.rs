@@ -137,6 +137,7 @@ async fn main() -> anyhow::Result<()> {
                 command::leave(),
                 command::mute(),
                 command::r(),
+                command::restart(),
                 command::rhai(),
                 command::s(),
                 command::st(),

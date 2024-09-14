@@ -419,6 +419,12 @@ pub async fn rhai(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()> 
     Ok(())
 }
 
+/// Restarts the container
+#[poise::command(prefix_command)]
+pub async fn restart(_ctx: Context<'_>) -> anyhow::Result<()> {
+    std::process::exit(1);
+}
+
 #[tracing::instrument]
 #[poise::command(prefix_command, owners_only)]
 pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<()> {
