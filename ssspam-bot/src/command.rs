@@ -317,8 +317,6 @@ async fn clean_cache_inner(ctx: &SerenityContext) -> anyhow::Result<()> {
         .get::<SaySoundCache>()
         .context("Could not get SaySoundCache")?
         .clone()
-        .write()
-        .unwrap()
         .clean();
     Ok(())
 }

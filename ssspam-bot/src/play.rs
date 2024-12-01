@@ -1,12 +1,12 @@
 use std::{
     cmp,
     process::{Command, Stdio},
-    sync::{Arc, RwLock},
+    sync::Arc,
     time::Duration,
 };
 
 use anyhow::Context as _;
-use moka::sync::Cache;
+use quick_cache::sync::Cache;
 use serenity::{client::Context, model::id::GuildId, prelude::TypeMapKey};
 use songbird::{
     input::cached::Memory,
@@ -21,18 +21,14 @@ use crate::{sslang::Action, SayCommand, SayCommands, SoundFile, SoundStorage};
 static MAX_PLAYABLE_DURATION: Duration = Duration::from_secs(180);
 static VOLUME: f32 = 0.05;
 
-#[derive(Clone)]
 pub struct SaySoundCache {
     cache: Cache<SayCommand, Arc<DecodedSaySound>>,
 }
 
 impl SaySoundCache {
-    pub fn new(max_capacity: u64, time_to_idle: Duration) -> Self {
+    pub fn new(max_capacity: usize) -> Self {
         Self {
-            cache: Cache::builder()
-                .max_capacity(max_capacity)
-                .time_to_idle(time_to_idle)
-                .build(),
+            cache: Cache::new(max_capacity),
         }
     }
 
@@ -45,12 +41,12 @@ impl SaySoundCache {
     }
 
     pub fn clean(&self) {
-        self.cache.invalidate_all();
+        self.cache.clear()
     }
 }
 
 impl TypeMapKey for SaySoundCache {
-    type Value = Arc<RwLock<Self>>;
+    type Value = Arc<Self>;
 }
 
 #[derive(Clone)]
@@ -175,7 +171,7 @@ async fn process_say_commands(
 
     let mut decoded_sounds = Vec::new();
     for say_command in say_commands.into_iter() {
-        let decoded = cache.read().unwrap().get(&say_command);
+        let decoded = cache.get(&say_command);
         if let Some(decoded) = decoded {
             decoded_sounds.push(decoded);
             continue;
@@ -192,10 +188,7 @@ async fn process_say_commands(
                     }
                 };
             let decoded = Arc::new(decoded);
-            cache
-                .write()
-                .unwrap()
-                .insert(say_command, Arc::clone(&decoded));
+            cache.insert(say_command, Arc::clone(&decoded));
 
             decoded_sounds.push(decoded);
         }

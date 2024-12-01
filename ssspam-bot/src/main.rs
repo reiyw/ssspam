@@ -2,7 +2,6 @@ use std::{
     collections::HashSet,
     path::PathBuf,
     sync::{Arc, Mutex, RwLock},
-    time::Duration,
 };
 
 use clap::Parser;
@@ -188,10 +187,7 @@ async fn main() -> anyhow::Result<()> {
 
         data.insert::<ChannelUserManager>(Arc::new(Mutex::new(ChannelUserManager::default())));
 
-        data.insert::<SaySoundCache>(Arc::new(RwLock::new(SaySoundCache::new(
-            50,
-            Duration::from_secs(60 * 10),
-        ))));
+        data.insert::<SaySoundCache>(Arc::new(SaySoundCache::new(50)));
 
         data.insert::<GuildBroadcast>(Arc::new(Mutex::new(GuildBroadcast::new())));
 
