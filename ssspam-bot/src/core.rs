@@ -186,11 +186,11 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
         .clone();
 
     let get_text_channel_id_span = tracing::info_span!("get_text_channel_id");
-    let text_channel_id = get_text_channel_id_span.in_scope(|| {
-        channel_manager
-            .get_text_channel_id(&guild.id)
-            .expect("Text channel ID was not found")
-    });
+    let Some(text_channel_id) =
+        get_text_channel_id_span.in_scope(|| channel_manager.get_text_channel_id(&guild.id))
+    else {
+        return Ok(());
+    };
     drop(get_text_channel_id_span);
     if text_channel_id != msg.channel_id {
         return Ok(());
