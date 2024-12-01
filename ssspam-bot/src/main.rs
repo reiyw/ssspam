@@ -180,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
             opt.config_dir.join("channel_state.json"),
         )));
 
-        data.insert::<ChannelUserManager>(Arc::new(Mutex::new(ChannelUserManager::default())));
+        data.insert::<ChannelUserManager>(Arc::new(ChannelUserManager::default()));
 
         data.insert::<SaySoundCache>(Arc::new(SaySoundCache::new(50)));
 

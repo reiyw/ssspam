@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::Context as _;
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use serde::{Deserialize, Serialize};
 use serenity::{
     client::Context,
@@ -86,32 +86,36 @@ impl TypeMapKey for ChannelManager {
     type Value = Arc<Self>;
 }
 
+/// Keeps track of users who are in the voice channel where the bot joining.
+///
+/// This is required because Serenity does not hold the information of users in the
+/// voice channel.
 #[derive(Debug, Clone, Default)]
 pub struct ChannelUserManager {
-    users: HashMap<GuildId, HashSet<UserId>>,
+    users: DashMap<GuildId, DashSet<UserId>>,
 }
 
 impl ChannelUserManager {
     pub fn get(&self, guild_id: &GuildId) -> HashSet<UserId> {
-        self.users
-            .get(guild_id)
-            .map_or_else(HashSet::new, |users| users.clone())
+        self.users.get(guild_id).map_or_else(HashSet::new, |users| {
+            users.iter().map(|user| *user).collect()
+        })
     }
 
-    pub fn add(&mut self, guild_id: GuildId, user_id: UserId) -> bool {
+    pub fn add(&self, guild_id: GuildId, user_id: UserId) -> bool {
         let users = self.users.entry(guild_id).or_default();
         users.insert(user_id)
     }
 
-    pub fn remove(&mut self, guild_id: &GuildId, user_id: &UserId) -> bool {
+    pub fn remove(&self, guild_id: &GuildId, user_id: &UserId) -> Option<UserId> {
         self.users
             .get_mut(guild_id)
-            .map_or(false, |users| users.remove(user_id))
+            .map_or_else(|| None, |users| users.remove(user_id))
     }
 }
 
 impl TypeMapKey for ChannelUserManager {
-    type Value = Arc<Mutex<Self>>;
+    type Value = Arc<Self>;
 }
 
 #[derive(Debug)]
