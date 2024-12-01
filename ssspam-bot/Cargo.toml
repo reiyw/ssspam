@@ -14,6 +14,7 @@ clap-verbosity-flag = "1.0.1"
 cloud-storage = { version = "0.11.1", default-features = false, features = ["rustls-tls"] }
 counter = "0.5.6"
 csv = "1.1.6"
+dashmap = { version = "6.1.0", features = ["serde"] }
 derive_builder = "0.11.2"
 dotenvy = "0.15.6"
 encoding_rs = "0.8.33"

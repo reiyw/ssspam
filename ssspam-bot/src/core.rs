@@ -3,10 +3,11 @@ use std::{
     fs,
     path::PathBuf,
     str::FromStr,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use anyhow::Context as _;
+use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serenity::{
     client::Context,
@@ -31,7 +32,7 @@ pub struct ChannelManager {
     /// The value is the tuple of the following:
     /// - ID of the voice channel where the bot joining and
     /// - ID of the text channel where the join command invoked
-    channels: HashMap<GuildId, (ChannelId, ChannelId)>,
+    channels: DashMap<GuildId, (ChannelId, ChannelId)>,
 
     config_file: PathBuf,
 }
@@ -54,7 +55,7 @@ impl ChannelManager {
     }
 
     pub fn join(
-        &mut self,
+        &self,
         guild_id: GuildId,
         voice_channel_id: ChannelId,
         text_channel_id: ChannelId,
@@ -66,7 +67,7 @@ impl ChannelManager {
         ret
     }
 
-    pub fn leave(&mut self, guild_id: &GuildId) -> Option<(ChannelId, ChannelId)> {
+    pub fn leave(&self, guild_id: &GuildId) -> Option<(GuildId, (ChannelId, ChannelId))> {
         let ret = self.channels.remove(guild_id);
         self.save().ok();
         ret
@@ -82,7 +83,7 @@ impl ChannelManager {
 }
 
 impl TypeMapKey for ChannelManager {
-    type Value = Arc<RwLock<Self>>;
+    type Value = Arc<Self>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -187,8 +188,6 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
     let get_text_channel_id_span = tracing::info_span!("get_text_channel_id");
     let text_channel_id = get_text_channel_id_span.in_scope(|| {
         channel_manager
-            .read()
-            .unwrap()
             .get_text_channel_id(&guild.id)
             .expect("Text channel ID was not found")
     });
@@ -205,12 +204,7 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
             .and_then(|voice_state| voice_state.channel_id)
     });
     drop(get_voice_channel_id_span);
-    if channel_manager
-        .read()
-        .unwrap()
-        .get_voice_channel_id(&guild.id)
-        != authors_voice_channel_id
-    {
+    if channel_manager.get_voice_channel_id(&guild.id) != authors_voice_channel_id {
         return Ok(());
     }
 

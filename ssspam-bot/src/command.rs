@@ -71,7 +71,7 @@ pub async fn join(ctx: Context<'_>) -> anyhow::Result<()> {
             .get::<ChannelManager>()
             .context("Could not get ChannelManager")?
             .clone();
-        channel_manager.write().unwrap().join(
+        channel_manager.join(
             ctx.guild_id().context("Guild was not found")?,
             voice_channel_id,
             ctx.channel_id(),
@@ -104,10 +104,7 @@ pub async fn leave(ctx: Context<'_>) -> anyhow::Result<()> {
         .get::<ChannelManager>()
         .context("Could not get ChannelManager")?
         .clone();
-    channel_manager
-        .write()
-        .unwrap()
-        .leave(&ctx.guild_id().context("Guild was not found")?);
+    channel_manager.leave(&ctx.guild_id().context("Guild was not found")?);
 
     Ok(())
 }
@@ -121,12 +118,7 @@ pub async fn leave_voice_channel(ctx: &SerenityContext, guild_id: GuildId) -> an
         .get::<ChannelManager>()
         .context("Could not get ChannelManager")?
         .clone();
-    let bots_voice_channel_id = {
-        channel_manager
-            .read()
-            .unwrap()
-            .get_voice_channel_id(&guild_id)
-    };
+    let bots_voice_channel_id = { channel_manager.get_voice_channel_id(&guild_id) };
     if let Some(bots_voice_channel_id) = bots_voice_channel_id {
         let guild = ctx.cache.guild(guild_id).unwrap().clone();
         let channel = guild
@@ -141,7 +133,7 @@ pub async fn leave_voice_channel(ctx: &SerenityContext, guild_id: GuildId) -> an
                 .context("Songbird Voice client placed in at initialization.")?
                 .clone();
             manager.remove(guild_id).await?;
-            channel_manager.write().unwrap().leave(&guild_id);
+            channel_manager.leave(&guild_id);
         }
     }
 
@@ -162,12 +154,7 @@ pub async fn play_join_or_leave_sound(
             .get::<ChannelManager>()
             .context("Could not get ChannelManager")?
             .clone();
-        let bots_voice_channel_id = {
-            channel_manager
-                .read()
-                .unwrap()
-                .get_voice_channel_id(&guild_id)
-        };
+        let bots_voice_channel_id = { channel_manager.get_voice_channel_id(&guild_id) };
         if let Some(bots_voice_channel_id) = bots_voice_channel_id {
             let guild = ctx.cache.guild(guild_id).unwrap().clone();
             let channel = guild

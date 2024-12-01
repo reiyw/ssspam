@@ -43,12 +43,7 @@ impl EventHandler for Handler {
             .unwrap()
             .clone();
         for guild_id in guilds {
-            let voice_channel_id = {
-                channel_manager
-                    .read()
-                    .unwrap()
-                    .get_voice_channel_id(&guild_id)
-            };
+            let voice_channel_id = { channel_manager.get_voice_channel_id(&guild_id) };
             if let Some(voice_channel_id) = voice_channel_id {
                 let res = manager.join(guild_id, voice_channel_id).await;
                 res.ok();
@@ -181,9 +176,9 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(watch_sound_storage(Arc::clone(&storage)));
         data.insert::<SoundStorage>(storage);
 
-        data.insert::<ChannelManager>(Arc::new(RwLock::new(ChannelManager::load_or_new(
+        data.insert::<ChannelManager>(Arc::new(ChannelManager::load_or_new(
             opt.config_dir.join("channel_state.json"),
-        ))));
+        )));
 
         data.insert::<ChannelUserManager>(Arc::new(Mutex::new(ChannelUserManager::default())));
 
