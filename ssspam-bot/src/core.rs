@@ -3,11 +3,10 @@ use std::{
     fs,
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex, RwLock},
 };
 
 use anyhow::Context as _;
-use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use serenity::{
     client::Context,
@@ -189,6 +188,7 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
     let text_channel_id = get_text_channel_id_span.in_scope(|| {
         channel_manager
             .read()
+            .unwrap()
             .get_text_channel_id(&guild.id)
             .expect("Text channel ID was not found")
     });
@@ -205,7 +205,12 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
             .and_then(|voice_state| voice_state.channel_id)
     });
     drop(get_voice_channel_id_span);
-    if channel_manager.read().get_voice_channel_id(&guild.id) != authors_voice_channel_id {
+    if channel_manager
+        .read()
+        .unwrap()
+        .get_voice_channel_id(&guild.id)
+        != authors_voice_channel_id
+    {
         return Ok(());
     }
 
@@ -229,7 +234,7 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
         .get::<GuildBroadcast>()
         .context("Could not get GuildBroadcast")?
         .clone();
-    let mut rx = guild_broadcast.lock().subscribe(guild.id);
+    let mut rx = guild_broadcast.lock().unwrap().subscribe(guild.id);
 
     tokio::select! {
         res = play_say_commands(saycmds, ctx, guild.id) => res,
@@ -269,7 +274,7 @@ pub async fn process_from_string(
         .get::<GuildBroadcast>()
         .context("Could not get GuildBroadcast")?
         .clone();
-    let mut rx = guild_broadcast.lock().subscribe(guild_id);
+    let mut rx = guild_broadcast.lock().unwrap().subscribe(guild_id);
 
     tokio::select! {
         res = play_say_commands(saycmds, ctx, guild_id) => res,

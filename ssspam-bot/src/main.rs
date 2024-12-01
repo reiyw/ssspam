@@ -1,11 +1,15 @@
-use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::HashSet,
+    path::PathBuf,
+    sync::{Arc, Mutex, RwLock},
+    time::Duration,
+};
 
 use clap::Parser;
 use dotenvy::dotenv;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{trace::Tracer, Resource};
-use parking_lot::{Mutex, RwLock};
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
@@ -40,7 +44,12 @@ impl EventHandler for Handler {
             .unwrap()
             .clone();
         for guild_id in guilds {
-            let voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
+            let voice_channel_id = {
+                channel_manager
+                    .read()
+                    .unwrap()
+                    .get_voice_channel_id(&guild_id)
+            };
             if let Some(voice_channel_id) = voice_channel_id {
                 let res = manager.join(guild_id, voice_channel_id).await;
                 res.ok();

@@ -1,7 +1,6 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use anyhow::anyhow;
-use parking_lot::RwLock;
 use rhai::{
     packages::{BasicMathPackage, Package},
     Engine,
@@ -17,11 +16,11 @@ pub fn interpret_rhai(source: &str) -> anyhow::Result<String> {
 
     // Override action of 'print' function
     let logger = result.clone();
-    engine.on_print(move |s| logger.write().push_str(s));
+    engine.on_print(move |s| logger.write().unwrap().push_str(s));
 
     engine.run(source).map_err(|e| anyhow!("{e:?}"))?;
 
-    let ret = result.read().to_string();
+    let ret = result.read().unwrap().to_string();
     Ok(ret)
 }
 

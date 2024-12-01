@@ -3,7 +3,7 @@ use std::{
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, RwLock},
     time::{Duration, SystemTime},
 };
 
@@ -16,7 +16,6 @@ use notify::{
     Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
 use once_cell::sync::OnceCell;
-use parking_lot::RwLock;
 use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 use serenity::prelude::TypeMapKey;
 use tokio::{runtime::Handle, sync::mpsc};
@@ -280,7 +279,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
     .unwrap();
 
     {
-        let storage = storage.read();
+        let storage = storage.read().unwrap();
         watcher
             .watch(&storage.dir, RecursiveMode::Recursive)
             .unwrap();
@@ -300,7 +299,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 ..
             } => match SoundFile::new_checked(&paths[0]) {
                 Ok(sound) => {
-                    let mut storage = storage.write();
+                    let mut storage = storage.write().unwrap();
                     storage.add(sound);
                 }
                 Err(e) => {
@@ -312,7 +311,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 paths,
                 ..
             } => {
-                let mut storage = storage.write();
+                let mut storage = storage.write().unwrap();
                 if let Some(file_stem) = paths[0].file_stem() {
                     storage.remove(file_stem.to_string_lossy());
                 }
@@ -323,7 +322,7 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                 ..
             } => match rename_mode {
                 RenameMode::Any | RenameMode::Other => {
-                    let mut storage = storage.write();
+                    let mut storage = storage.write().unwrap();
                     if let Ok(sound) = SoundFile::new_checked(&paths[0]) {
                         storage.add(sound);
                     } else if let Some(file_stem) = paths[0].file_stem() {
@@ -331,19 +330,19 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
                     }
                 }
                 RenameMode::From => {
-                    let mut storage = storage.write();
+                    let mut storage = storage.write().unwrap();
                     if let Some(file_stem) = paths[0].file_stem() {
                         storage.remove(file_stem.to_string_lossy());
                     }
                 }
                 RenameMode::To => {
                     if let Ok(sound) = SoundFile::new_checked(&paths[0]) {
-                        let mut storage = storage.write();
+                        let mut storage = storage.write().unwrap();
                         storage.add(sound);
                     }
                 }
                 RenameMode::Both => {
-                    let mut storage = storage.write();
+                    let mut storage = storage.write().unwrap();
                     if let Some(file_stem) = paths[0].file_stem() {
                         storage.remove(file_stem.to_string_lossy());
                     }
@@ -440,7 +439,7 @@ mod test {
         .unwrap();
         tokio::time::sleep(DELAY).await;
         {
-            let storage = storage.read();
+            let storage = storage.read().unwrap();
             assert!(storage.get("sainou").is_some());
         }
 
@@ -451,7 +450,7 @@ mod test {
         .unwrap();
         tokio::time::sleep(DELAY).await;
         {
-            let storage = storage.read();
+            let storage = storage.read().unwrap();
             assert!(storage.get("dadeisan").is_some());
             assert_eq!(storage.len(), 2);
         }
@@ -459,7 +458,7 @@ mod test {
         fs::remove_file(temp_dir_path.join("dadeisan.mp3")).unwrap();
         tokio::time::sleep(DELAY).await;
         {
-            let storage = storage.read();
+            let storage = storage.read().unwrap();
             assert!(storage.get("dadeisan").is_none());
             assert_eq!(storage.len(), 1);
         }
@@ -471,7 +470,7 @@ mod test {
         .unwrap();
         tokio::time::sleep(DELAY).await;
         {
-            let storage = storage.read();
+            let storage = storage.read().unwrap();
             assert!(storage.get("sainou").is_none());
             assert!(storage.get("sainou2").is_some());
             assert_eq!(storage.len(), 1);

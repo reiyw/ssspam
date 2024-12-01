@@ -71,7 +71,7 @@ pub async fn join(ctx: Context<'_>) -> anyhow::Result<()> {
             .get::<ChannelManager>()
             .context("Could not get ChannelManager")?
             .clone();
-        channel_manager.write().join(
+        channel_manager.write().unwrap().join(
             ctx.guild_id().context("Guild was not found")?,
             voice_channel_id,
             ctx.channel_id(),
@@ -106,6 +106,7 @@ pub async fn leave(ctx: Context<'_>) -> anyhow::Result<()> {
         .clone();
     channel_manager
         .write()
+        .unwrap()
         .leave(&ctx.guild_id().context("Guild was not found")?);
 
     Ok(())
@@ -120,7 +121,12 @@ pub async fn leave_voice_channel(ctx: &SerenityContext, guild_id: GuildId) -> an
         .get::<ChannelManager>()
         .context("Could not get ChannelManager")?
         .clone();
-    let bots_voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
+    let bots_voice_channel_id = {
+        channel_manager
+            .read()
+            .unwrap()
+            .get_voice_channel_id(&guild_id)
+    };
     if let Some(bots_voice_channel_id) = bots_voice_channel_id {
         let guild = ctx.cache.guild(guild_id).unwrap().clone();
         let channel = guild
@@ -135,7 +141,7 @@ pub async fn leave_voice_channel(ctx: &SerenityContext, guild_id: GuildId) -> an
                 .context("Songbird Voice client placed in at initialization.")?
                 .clone();
             manager.remove(guild_id).await?;
-            channel_manager.write().leave(&guild_id);
+            channel_manager.write().unwrap().leave(&guild_id);
         }
     }
 
@@ -156,7 +162,12 @@ pub async fn play_join_or_leave_sound(
             .get::<ChannelManager>()
             .context("Could not get ChannelManager")?
             .clone();
-        let bots_voice_channel_id = { channel_manager.read().get_voice_channel_id(&guild_id) };
+        let bots_voice_channel_id = {
+            channel_manager
+                .read()
+                .unwrap()
+                .get_voice_channel_id(&guild_id)
+        };
         if let Some(bots_voice_channel_id) = bots_voice_channel_id {
             let guild = ctx.cache.guild(guild_id).unwrap().clone();
             let channel = guild
@@ -178,7 +189,7 @@ pub async fn play_join_or_leave_sound(
         .get::<ChannelUserManager>()
         .context("Could not get ChannelUserManager")?
         .clone();
-    let old_users = channel_user_manager.lock().get(&guild_id);
+    let old_users = channel_user_manager.lock().unwrap().get(&guild_id);
 
     let configs = ctx
         .data
@@ -192,10 +203,10 @@ pub async fn play_join_or_leave_sound(
     let mut diff = current_users.difference(&old_users);
     if diff.contains(&actioned_user) {
         {
-            let mut lock = channel_user_manager.lock();
+            let mut lock = channel_user_manager.lock().unwrap();
             lock.add(guild_id, actioned_user);
         }
-        let sound = { configs.read().get_joinsound(&actioned_user) };
+        let sound = { configs.read().unwrap().get_joinsound(&actioned_user) };
         if let Some(sound) = sound {
             info!(sound, "playing joinsound");
             process_from_string(ctx, guild_id, sound.as_str()).await?
@@ -207,10 +218,10 @@ pub async fn play_join_or_leave_sound(
     let mut diff = old_users.difference(&current_users);
     if diff.contains(&actioned_user) {
         {
-            let mut lock = channel_user_manager.lock();
+            let mut lock = channel_user_manager.lock().unwrap();
             lock.remove(&guild_id, &actioned_user);
         }
-        let sound = { configs.read().get_leavesound(&actioned_user) };
+        let sound = { configs.read().unwrap().get_leavesound(&actioned_user) };
         if let Some(sound) = sound {
             info!(sound, "playing leavesound");
             process_from_string(ctx, guild_id, sound.as_str()).await?
@@ -286,6 +297,7 @@ pub async fn stop(ctx: Context<'_>) -> anyhow::Result<()> {
         .clone();
     let tx = guild_broadcast
         .lock()
+        .unwrap()
         .get_sender(ctx.guild_id().context("Guild was not found")?);
     tx.send(OpsMessage::Stop)?;
 
@@ -306,6 +318,7 @@ async fn clean_cache_inner(ctx: &SerenityContext) -> anyhow::Result<()> {
         .context("Could not get SaySoundCache")?
         .clone()
         .write()
+        .unwrap()
         .clean();
     Ok(())
 }
@@ -320,7 +333,11 @@ pub async fn r(ctx: Context<'_>, #[rest] rest: Option<String>) -> anyhow::Result
         .get::<SoundStorage>()
         .context("Could not get SoundStorage")?
         .clone();
-    let file = storage.read().get_random().context("Has no sound file")?;
+    let file = storage
+        .read()
+        .unwrap()
+        .get_random()
+        .context("Has no sound file")?;
     match SayCommands::from_str(&format!("{} {}", file.name, rest.unwrap_or_default())) {
         Ok(say_commands) => {
             ctx.say(say_commands.to_string()).await.ok();
@@ -342,7 +359,7 @@ pub async fn s(ctx: Context<'_>, query: String) -> anyhow::Result<()> {
             .get::<SoundStorage>()
             .unwrap()
             .clone();
-        let sims = storage.read().calc_similarities(query);
+        let sims = storage.read().unwrap().calc_similarities(query);
         let names: Vec<_> = sims
             .iter()
             .take(20)
@@ -369,7 +386,7 @@ pub async fn st(ctx: Context<'_>, query: String) -> anyhow::Result<()> {
         .get::<SoundStorage>()
         .unwrap()
         .clone();
-    let sims = storage.read().calc_similarities(query);
+    let sims = storage.read().unwrap().calc_similarities(query);
 
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_CLEAN);
@@ -454,6 +471,7 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
 
                 let out_path = storage
                     .read()
+                    .unwrap()
                     .dir
                     .join(PathBuf::from(entry.filename()).file_name().unwrap());
                 let mut writer = tokio::fs::File::create(&out_path).await?;
@@ -477,7 +495,7 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
                     .await?;
             }
         } else if attachment.filename.ends_with(".mp3") {
-            let out_path = storage.read().dir.join(&attachment.filename);
+            let out_path = storage.read().unwrap().dir.join(&attachment.filename);
             let mut file = tokio::fs::File::create(&out_path).await?;
             file.write_all(&content).await?;
             count += 1;
@@ -497,9 +515,9 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
         }
     }
 
-    tokio::spawn(update_sounds_bin(storage.read().dir.clone()));
+    tokio::spawn(update_sounds_bin(storage.read().unwrap().dir.clone()));
 
-    storage.write().reload();
+    storage.write().unwrap().reload();
 
     clean_cache_inner(ctx.serenity_context()).await?;
 
@@ -523,7 +541,7 @@ pub async fn delete(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()
     let mut deleted = Vec::new();
 
     for name in rest.split_whitespace() {
-        let sound_file = { storage.read().get(name) };
+        let sound_file = { storage.read().unwrap().get(name) };
         if let Some(file) = sound_file {
             if fs::remove_file(&file.path).is_ok()
                 && client
@@ -537,7 +555,7 @@ pub async fn delete(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()
         }
     }
 
-    tokio::spawn(update_sounds_bin(storage.read().dir.clone()));
+    tokio::spawn(update_sounds_bin(storage.read().unwrap().dir.clone()));
 
     clean_cache_inner(ctx.serenity_context()).await?;
 
@@ -572,7 +590,7 @@ pub async fn config(
             Some(key) => match value {
                 Some(value) => {
                     let old_value = {
-                        let mut configs = configs.write();
+                        let mut configs = configs.write().unwrap();
                         let old_value = configs.get(
                             &ctx.guild_id().context("Guild was not found")?,
                             &key,
@@ -600,7 +618,7 @@ pub async fn config(
         "remove" => match key {
             Some(key) => {
                 let old_value = {
-                    let mut configs = configs.write();
+                    let mut configs = configs.write().unwrap();
                     let old_value = configs.get(
                         &ctx.guild_id().context("Guild was not found")?,
                         &key,

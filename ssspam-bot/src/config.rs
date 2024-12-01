@@ -1,8 +1,10 @@
 // TODO: need to completely rewrite the configuration logic.
-use std::{path::Path, sync::Arc};
+use std::{
+    path::Path,
+    sync::{Arc, RwLock},
+};
 
 use anyhow::{bail, Context as _};
-use parking_lot::RwLock;
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use serenity::{
     model::prelude::{GuildId, UserId},

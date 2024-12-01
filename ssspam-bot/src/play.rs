@@ -1,13 +1,12 @@
 use std::{
     cmp,
     process::{Command, Stdio},
-    sync::Arc,
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
 use anyhow::Context as _;
 use moka::sync::Cache;
-use parking_lot::RwLock;
 use serenity::{client::Context, model::id::GuildId, prelude::TypeMapKey};
 use songbird::{
     input::cached::Memory,
@@ -176,12 +175,13 @@ async fn process_say_commands(
 
     let mut decoded_sounds = Vec::new();
     for say_command in say_commands.into_iter() {
-        if let Some(decoded) = cache.read().get(&say_command) {
+        let decoded = cache.read().unwrap().get(&say_command);
+        if let Some(decoded) = decoded {
             decoded_sounds.push(decoded);
             continue;
         }
 
-        let sound_file = { storage.read().get(&say_command.name) };
+        let sound_file = { storage.read().unwrap().get(&say_command.name) };
         if let Some(sound_file) = sound_file {
             let decoded =
                 match DecodedSaySound::from_command_and_file(&say_command, &sound_file).await {
@@ -192,7 +192,10 @@ async fn process_say_commands(
                     }
                 };
             let decoded = Arc::new(decoded);
-            cache.write().insert(say_command, Arc::clone(&decoded));
+            cache
+                .write()
+                .unwrap()
+                .insert(say_command, Arc::clone(&decoded));
 
             decoded_sounds.push(decoded);
         }
