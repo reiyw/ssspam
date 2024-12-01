@@ -3,7 +3,7 @@ use std::{
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{Arc, OnceLock, RwLock},
     time::{Duration, SystemTime},
 };
 
@@ -15,7 +15,6 @@ use notify::{
     event::{CreateKind, ModifyKind, RenameMode},
     Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
 };
-use once_cell::sync::OnceCell;
 use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 use serenity::prelude::TypeMapKey;
 use tokio::{runtime::Handle, sync::mpsc};
@@ -91,15 +90,15 @@ impl Metadata {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct SoundFile {
     pub name: String,
     pub path: PathBuf,
 
     // Retrieving metadata requires file parsing and is time consuming. For most
-    // files, metadata is not needed immediately, so wrap in OnceCell to delay
+    // files, metadata is not needed immediately, so wrap in OnceLock to delay
     // metadata retrieval.
-    metadata: OnceCell<Metadata>,
+    metadata: OnceLock<Metadata>,
 }
 
 impl SoundFile {
@@ -108,7 +107,7 @@ impl SoundFile {
         Self {
             name: path.as_ref().file_stem().unwrap().to_string_lossy().into(),
             path: path.as_ref().into(),
-            metadata: OnceCell::new(),
+            metadata: OnceLock::new(),
         }
     }
 
@@ -199,7 +198,7 @@ where
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct SoundStorage {
     /// Lowercased name to [`Sound`].
     sounds: BTreeMap<String, SoundFile>,
@@ -396,15 +395,12 @@ mod test {
         storage.remove("d");
         storage.remove("dadeisan");
         assert_eq!(storage.len(), 1);
-        assert_eq!(storage.get("d"), None);
-        assert_eq!(storage.get("dadeisan"), None);
-        assert_eq!(
-            storage.get_random().unwrap(),
-            storage.get("sainou").unwrap()
-        );
+        assert!(storage.get("d").is_none());
+        assert!(storage.get("dadeisan").is_none());
+        assert_eq!(storage.get_random().unwrap().name, "sainou",);
 
         storage.remove("sainou");
-        assert_eq!(storage.get_random(), None);
+        assert!(storage.get_random().is_none());
     }
 
     #[test]
@@ -414,9 +410,9 @@ mod test {
             .join("tests/sound");
         let storage = SoundStorage::load(sound_dir);
         let sims = storage.calc_similarities("dadei");
-        assert_eq!(sims[0].1, storage.get("dadeisan").unwrap());
-        assert_eq!(sims[1].1, storage.get("d").unwrap());
-        assert_eq!(sims[2].1, storage.get("sainou").unwrap());
+        assert_eq!(sims[0].1.name, "dadeisan");
+        assert_eq!(sims[1].1.name, "d");
+        assert_eq!(sims[2].1.name, "sainou");
     }
 
     #[tokio::test]

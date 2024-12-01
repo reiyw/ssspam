@@ -3427,7 +3427,6 @@ dependencies = [
  "mp3-metadata",
  "nom",
  "notify",
- "once_cell",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-semantic-conventions",
