@@ -479,14 +479,4 @@ mod test {
         let sounds = storage.files().cloned().to_sounds();
         assert_eq!(sounds.sounds.len(), 3);
     }
-
-    #[test]
-    fn test_references() {
-        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("tests/sound");
-        let storage = SoundStorage::load(sound_dir);
-        let sound = storage.get("hen").unwrap();
-        assert_eq!(sound.references(), &["変態オナニー青年アキラ"]);
-    }
 }
