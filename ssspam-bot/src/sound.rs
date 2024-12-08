@@ -48,9 +48,6 @@ impl Metadata {
         let updated_at = fs::metadata(path.as_ref())?.modified()?;
 
         let mut references = Vec::new();
-        if let Some(tag) = data.tag {
-            references.push(tag.artist);
-        }
         for info in data.optional_info {
             references.extend(info.composers);
             references.extend(info.performers);
@@ -481,5 +478,15 @@ mod test {
         let storage = SoundStorage::load(sound_dir);
         let sounds = storage.files().cloned().to_sounds();
         assert_eq!(sounds.sounds.len(), 3);
+    }
+
+    #[test]
+    fn test_references() {
+        let sound_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tests/sound");
+        let storage = SoundStorage::load(sound_dir);
+        let sound = storage.get("hen").unwrap();
+        assert_eq!(sound.references(), &["変態オナニー青年アキラ"]);
     }
 }
