@@ -80,6 +80,7 @@ pub async fn join(ctx: Context<'_>) -> anyhow::Result<()> {
         ctx.channel_id()
             .say(&ctx, "Error joining the channel")
             .await?;
+        warn!("Failed to join voice channel: {:?}", handler_lock.err());
     }
 
     Ok(())
