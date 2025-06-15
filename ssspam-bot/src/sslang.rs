@@ -87,7 +87,7 @@ impl SayCommands {
         self.0.iter()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -127,7 +127,7 @@ impl std::fmt::Display for SayCommands {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s: String = self.iter().map(|c| c.to_string()).collect();
         s.truncate(s.len() - 2);
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

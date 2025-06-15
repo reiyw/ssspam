@@ -263,6 +263,7 @@ impl SoundStorage {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
     let (tx, mut rx) = mpsc::channel(1);
     let handle = Handle::current();
