@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use async_zip::read::mem::ZipFileReader;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
-use prettytable::{format, Table};
+use prettytable::{Table, format};
 use serenity::{
     all::{Attachment, Context as SerenityContext},
     model::{id::GuildId, prelude::UserId},
@@ -15,10 +15,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{info, warn};
 
 use crate::{
-    core::{process_from_string, ChannelUserManager},
+    ChannelManager, Configs, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache, SoundStorage,
+    core::{ChannelUserManager, process_from_string},
     interpret_rhai,
     web::update_sounds_bin,
-    ChannelManager, Configs, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache, SoundStorage,
 };
 
 type Context<'a> = poise::Context<'a, (), anyhow::Error>;
@@ -522,16 +522,15 @@ pub async fn delete(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()
 
     for name in rest.split_whitespace() {
         let sound_file = { storage.read().unwrap().get(name) };
-        if let Some(file) = sound_file {
-            if fs::remove_file(&file.path).is_ok()
-                && client
-                    .object()
-                    .delete("surfpvparena", &format!("dist/sound/{}.mp3", file.name))
-                    .await
-                    .is_ok()
-            {
-                deleted.push(file.name.clone());
-            }
+        if let Some(file) = sound_file
+            && fs::remove_file(&file.path).is_ok()
+            && client
+                .object()
+                .delete("surfpvparena", &format!("dist/sound/{}.mp3", file.name))
+                .await
+                .is_ok()
+        {
+            deleted.push(file.name.clone());
         }
     }
 

@@ -15,8 +15,8 @@ extern crate prettytable;
 pub use crate::{
     command::leave_voice_channel,
     config::Configs,
-    core::{process_message, ChannelManager, GuildBroadcast, OpsMessage},
-    play::{play_say_commands, SaySoundCache},
+    core::{ChannelManager, GuildBroadcast, OpsMessage, process_message},
+    play::{SaySoundCache, play_say_commands},
     scripting::interpret_rhai,
     sound::{SoundFile, SoundStorage},
     sslang::{SayCommand, SayCommandBuilder, SayCommands},

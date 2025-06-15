@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use nom::{
+    Finish, IResult,
     branch::alt,
     bytes::complete::{tag, take_till, take_while1},
     character::complete::{char, multispace0, u32},
@@ -9,7 +10,6 @@ use nom::{
     multi::{many0, many1},
     number::complete::double,
     sequence::{delimited, pair, preceded},
-    Finish, IResult,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
@@ -248,40 +248,50 @@ mod test {
     fn test_parse_single_command_without_options() {
         assert_eq!(
             SayCommands::from_str("a").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str("a;").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str(" a  ; ").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str("a|").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .action(Action::Concat)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .action(Action::Concat)
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str(" a  | ").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .action(Action::Concat)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .action(Action::Concat)
+                    .build()
+                    .unwrap()
+            ])
         );
     }
 
@@ -289,53 +299,63 @@ mod test {
     fn test_parse_single_command_with_options() {
         assert_eq!(
             SayCommands::from_str("a 50").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .speed(50)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .speed(50)
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str(" a  50 ").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .speed(50)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .speed(50)
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str("a @50").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .speed(50)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .speed(50)
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str("a @50 p10 w0.1 s0.2 d0.3 s").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .speed(50)
-                .pitch(10)
-                .wait(100)
-                .start(200)
-                .duration(Some(300))
-                .stop(true)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .speed(50)
+                    .pitch(10)
+                    .wait(100)
+                    .start(200)
+                    .duration(Some(300))
+                    .stop(true)
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str("a@50p10w0.1s0.2d0.3s").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .speed(50)
-                .pitch(10)
-                .wait(100)
-                .start(200)
-                .duration(Some(300))
-                .stop(true)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .speed(50)
+                    .pitch(10)
+                    .wait(100)
+                    .start(200)
+                    .duration(Some(300))
+                    .stop(true)
+                    .build()
+                    .unwrap()
+            ])
         );
     }
 
@@ -431,19 +451,23 @@ mod test {
     fn test_prioritize_latter_option() {
         assert_eq!(
             SayCommands::from_str("a 10 20").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .speed(20)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .speed(20)
+                    .build()
+                    .unwrap()
+            ])
         );
         assert_eq!(
             SayCommands::from_str("a 10 20 30").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .speed(30)
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .speed(30)
+                    .build()
+                    .unwrap()
+            ])
         );
     }
 
@@ -456,10 +480,12 @@ mod test {
     #[test]
     fn test_to_string() {
         assert_eq!(
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_string())
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_string())
+                    .build()
+                    .unwrap()
+            ])
             .to_string(),
             "a".to_string()
         );
@@ -516,11 +542,13 @@ mod test {
     fn test_audio_filter() {
         assert_eq!(
             SayCommands::from_str("a af=aecho=0.8:0.88:60:0.4").unwrap(),
-            SayCommands(vec![SayCommandBuilder::default()
-                .name("a".to_owned())
-                .audio_filter(Some("aecho=0.8:0.88:60:0.4".to_owned()))
-                .build()
-                .unwrap()])
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("a".to_owned())
+                    .audio_filter(Some("aecho=0.8:0.88:60:0.4".to_owned()))
+                    .build()
+                    .unwrap()
+            ])
         );
 
         assert_eq!(

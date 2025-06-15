@@ -8,7 +8,7 @@ use clap::Parser;
 use dotenvy::dotenv;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{trace::Tracer, Resource};
+use opentelemetry_sdk::{Resource, trace::Tracer};
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
@@ -17,13 +17,13 @@ use serenity::{
 };
 use songbird::{self, SerenityInit};
 use ssspam_bot::{
-    command, command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
-    process_message, sound::watch_sound_storage, ChannelManager, Configs, GuildBroadcast,
-    SaySoundCache, SoundStorage,
+    ChannelManager, Configs, GuildBroadcast, SaySoundCache, SoundStorage, command,
+    command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
+    process_message, sound::watch_sound_storage,
 };
 use tracing::{info, warn};
 use tracing_opentelemetry::OpenTelemetryLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 struct Handler;
 

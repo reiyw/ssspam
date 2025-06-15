@@ -11,7 +11,7 @@ use prost::Message;
 use serde::Serialize;
 use tempfile::tempdir;
 
-use crate::{sound::ToSoundsProto, SoundStorage};
+use crate::{SoundStorage, sound::ToSoundsProto};
 
 #[derive(Debug, Serialize)]
 struct Data {

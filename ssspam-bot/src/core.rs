@@ -24,7 +24,7 @@ use tokio::sync::{
 };
 use tracing::Instrument;
 
-use crate::{play_say_commands, SayCommands};
+use crate::{SayCommands, play_say_commands};
 
 /// Keeps track of channels where the bot joining.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

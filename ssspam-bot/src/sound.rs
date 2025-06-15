@@ -12,10 +12,10 @@ use counter::Counter;
 use encoding_rs::Encoding;
 use glob::glob;
 use notify::{
-    event::{CreateKind, ModifyKind, RenameMode},
     Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+    event::{CreateKind, ModifyKind, RenameMode},
 };
-use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng, seq::IteratorRandom};
 use serenity::prelude::TypeMapKey;
 use tokio::{runtime::Handle, sync::mpsc};
 use tracing::{info, warn};

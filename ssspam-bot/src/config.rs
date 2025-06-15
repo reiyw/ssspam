@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use serenity::{
     model::prelude::{GuildId, UserId},

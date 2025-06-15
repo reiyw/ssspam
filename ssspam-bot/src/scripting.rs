@@ -2,8 +2,8 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::anyhow;
 use rhai::{
-    packages::{BasicMathPackage, Package},
     Engine,
+    packages::{BasicMathPackage, Package},
 };
 use rhai_rand::RandomPackage;
 
