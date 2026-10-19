@@ -539,6 +539,34 @@ mod test {
     }
 
     #[test]
+    fn test_parse_compact_options() {
+        assert_eq!(
+            SayCommands::from_str("x p112w.5d.45;x 150p94d1.25|x").unwrap(),
+            SayCommands(vec![
+                SayCommandBuilder::default()
+                    .name("x".to_owned())
+                    .pitch(112)
+                    .wait(500)
+                    .duration(Some(450))
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("x".to_owned())
+                    .speed(150)
+                    .pitch(94)
+                    .duration(Some(1250))
+                    .action(Action::Concat)
+                    .build()
+                    .unwrap(),
+                SayCommandBuilder::default()
+                    .name("x".to_owned())
+                    .build()
+                    .unwrap(),
+            ])
+        );
+    }
+
+    #[test]
     fn test_audio_filter() {
         assert_eq!(
             SayCommands::from_str("a af=aecho=0.8:0.88:60:0.4").unwrap(),

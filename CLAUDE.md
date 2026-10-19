@@ -10,6 +10,7 @@ Workspace crates:
 - `ssspam-bot`: the bot itself (lib + `ssspam-bot` main binary) plus helper binaries `gen_viewer` (generates the static sound-list HTML viewer, see `dist/`) and `stats` (usage stats from a message log).
 - `ssspam-proto`: protobuf definitions (`src/ss.proto`) compiled by `prost-build` in `build.rs`. Building requires `protoc` (`protobuf-compiler`).
 - `ssspam-util`: `encode_sounds` binary that dumps the sound list as a `ssspam.ss.Sounds` protobuf.
+- `scripts/sscompose.py` (not part of the workspace; run with `uv run --script`): turns a MIDI/note-text score into sslang messages that play a song by pitch-shifting one sample. It mirrors the parsing/timing rules of `sslang.rs` and `play.rs`, so keep it in sync when those change.
 
 ## Commands
 
