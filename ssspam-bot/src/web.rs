@@ -7,11 +7,14 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
+use google_cloud_storage::client::Storage;
 use prost::Message;
 use serde::Serialize;
 use tempfile::tempdir;
 
 use crate::{SoundStorage, sound::ToSoundsProto};
+
+pub const GCS_BUCKET: &str = "projects/_/buckets/surfpvparena";
 
 #[derive(Debug, Serialize)]
 struct Data {
@@ -65,10 +68,11 @@ pub async fn update_data_json<P: AsRef<Path>>(sound_dir: P) -> anyhow::Result<()
     gen_data_json_from_sound_dir(sound_dir, &out_file)?;
 
     let data = fs::read(&out_file)?;
-    let client = cloud_storage::Client::default();
+    let client = Storage::builder().build().await?;
     client
-        .object()
-        .create("surfpvparena", data, "dist/data.json", "application/json")
+        .write_object(GCS_BUCKET, "dist/data.json", bytes::Bytes::from(data))
+        .set_content_type("application/json")
+        .send_buffered()
         .await?;
     Ok(())
 }
@@ -81,15 +85,11 @@ pub async fn update_sounds_bin<P: AsRef<Path>>(sound_dir: P) -> anyhow::Result<(
     gen_sounds_bin_from_sound_dir(sound_dir, &out_file)?;
 
     let data = fs::read(&out_file)?;
-    let client = cloud_storage::Client::default();
+    let client = Storage::builder().build().await?;
     client
-        .object()
-        .create(
-            "surfpvparena",
-            data,
-            "dist/sounds.bin",
-            "application/octet-stream",
-        )
+        .write_object(GCS_BUCKET, "dist/sounds.bin", bytes::Bytes::from(data))
+        .set_content_type("application/octet-stream")
+        .send_buffered()
         .await?;
     Ok(())
 }

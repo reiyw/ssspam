@@ -25,7 +25,7 @@ cargo run --bin ssspam-bot                   # reads config from env / .env
 
 Formatting uses nightly rustfmt (`rustfmt.toml`: `imports_granularity = "Crate"`, `group_imports = "StdExternalCrate"`, `reorder_impl_items`), so always run `cargo +nightly fmt`, not stable fmt. CI enforces both the clippy flags above and the fmt check.
 
-Runtime requirements: `ffmpeg`/`ffprobe` on PATH (used for decoding every sound) and `libopus`. Configuration comes from CLI flags or env vars (loaded via `dotenvy` from `.env`): `DISCORD_TOKEN`, `SOUND_DIR`, `CONFIG_DIR`, `COMMAND_PREFIX` (default `~`), optional `OTLP_ENDPOINT` (enables OpenTelemetry tracing; without it no tracing subscriber is installed at all).
+Runtime requirements: `ffmpeg`/`ffprobe` on PATH (used for decoding every sound) and `libopus`. Configuration comes from CLI flags or env vars (loaded via `dotenvy` from `.env`): `DISCORD_TOKEN`, `SOUND_DIR`, `CONFIG_DIR`, `COMMAND_PREFIX` (default `~`), optional `OTLP_ENDPOINT` (enables OpenTelemetry tracing; without it no tracing subscriber is installed at all). GCS access (`upload`/`delete`) uses Application Default Credentials, i.e. `GOOGLE_APPLICATION_CREDENTIALS` pointing to a service account key JSON.
 
 Tests use the fixture MP3s in `tests/sound/` (referenced via `CARGO_MANIFEST_DIR/../tests/sound`).
 

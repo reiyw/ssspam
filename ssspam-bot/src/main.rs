@@ -118,6 +118,12 @@ struct Opt {
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
+    // Both ring (serenity/songbird) and aws-lc-rs (google-cloud-storage) are
+    // compiled into rustls, so it can't pick a process-wide default by itself.
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .map_err(|_| anyhow::anyhow!("Failed to install the rustls crypto provider"))?;
+
     let opt = Opt::parse();
 
     if let Some(endpoint) = opt.otlp_endpoint {

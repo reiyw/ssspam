@@ -58,8 +58,7 @@ impl Metadata {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .map(|s| {
-                let result =
-                    charset_normalizer_rs::from_bytes(&s.as_bytes().to_vec(), None).unwrap();
+                let result = charset_normalizer_rs::from_bytes(s.as_bytes(), None).unwrap();
                 if let Some(best) = result.get_best() {
                     if !matches!(
                         best.most_probably_language(),

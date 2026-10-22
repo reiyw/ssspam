@@ -8,11 +8,10 @@ default-run = "ssspam-bot"
 [dependencies]
 anyhow = "1.0.64"
 async_zip = { version = "0.0.11", features = ["deflate"] }
+bytes = "1.10.1"
 charset-normalizer-rs = "1.0.6"
 chrono = "0.4.22"
 clap = { version = "4.1.4", features = ["derive", "env"] }
-clap-verbosity-flag = "1.0.1"
-cloud-storage = { version = "0.11.1", default-features = false, features = ["rustls-tls"] }
 counter = "0.5.6"
 csv = "1.1.6"
 dashmap = { version = "6.1.0", features = ["serde"] }
@@ -20,6 +19,7 @@ derive_builder = "0.11.2"
 dotenvy = "0.15.6"
 encoding_rs = "0.8.33"
 glob = "0.3.0"
+google-cloud-storage = "1.21.0"
 humantime = "2.1.0"
 itertools = "0.10.5"
 maud = "0.23.0"
@@ -39,6 +39,7 @@ quick_cache = "0.6.9"
 rand = "0.8.5"
 rhai = "1.12.0"
 rhai-rand = "0.1.4"
+rustls = { version = "0.23.37", default-features = false, features = ["aws_lc_rs", "std"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
 serenity = { version = "0.12.2", features = ["voice"] }

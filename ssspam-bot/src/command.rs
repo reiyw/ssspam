@@ -3,6 +3,7 @@ use std::{collections::HashSet, fs, path::PathBuf, str::FromStr, time::Duration}
 use anyhow::Context as _;
 use async_zip::read::mem::ZipFileReader;
 use chrono::{DateTime, Utc};
+use google_cloud_storage::client::{Storage, StorageControl};
 use itertools::Itertools;
 use prettytable::{Table, format};
 use serenity::{
@@ -18,7 +19,7 @@ use crate::{
     ChannelManager, Configs, GuildBroadcast, OpsMessage, SayCommands, SaySoundCache, SoundStorage,
     core::{ChannelUserManager, process_from_string},
     interpret_rhai,
-    web::update_sounds_bin,
+    web::{GCS_BUCKET, update_sounds_bin},
 };
 
 type Context<'a> = poise::Context<'a, (), anyhow::Error>;
@@ -434,7 +435,7 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
         .get::<SoundStorage>()
         .context("Could not get SoundStorage")?
         .clone();
-    let client = cloud_storage::Client::default();
+    let client = Storage::builder().build().await?;
 
     for attachment in files {
         let content = attachment.download().await?;
@@ -462,16 +463,16 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
                 let mut content = vec![];
                 file.read_to_end(&mut content).await?;
                 client
-                    .object()
-                    .create(
-                        "surfpvparena",
-                        content,
-                        &format!(
+                    .write_object(
+                        GCS_BUCKET,
+                        format!(
                             "dist/sound/{}",
                             out_path.file_name().unwrap().to_str().unwrap()
                         ),
-                        "audio/mpeg",
+                        bytes::Bytes::from(content),
                     )
+                    .set_content_type("audio/mpeg")
+                    .send_buffered()
                     .await?;
             }
         } else if attachment.filename.ends_with(".mp3") {
@@ -481,16 +482,16 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
             count += 1;
 
             client
-                .object()
-                .create(
-                    "surfpvparena",
-                    content,
-                    &format!(
+                .write_object(
+                    GCS_BUCKET,
+                    format!(
                         "dist/sound/{}",
                         out_path.file_name().unwrap().to_str().unwrap()
                     ),
-                    "audio/mpeg",
+                    bytes::Bytes::from(content),
                 )
+                .set_content_type("audio/mpeg")
+                .send_buffered()
                 .await?;
         }
     }
@@ -517,7 +518,7 @@ pub async fn delete(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()
         .get::<SoundStorage>()
         .context("Could not get SoundStorage")?
         .clone();
-    let client = cloud_storage::Client::default();
+    let client = StorageControl::builder().build().await?;
     let mut deleted = Vec::new();
 
     for name in rest.split_whitespace() {
@@ -525,8 +526,10 @@ pub async fn delete(ctx: Context<'_>, #[rest] rest: String) -> anyhow::Result<()
         if let Some(file) = sound_file
             && fs::remove_file(&file.path).is_ok()
             && client
-                .object()
-                .delete("surfpvparena", &format!("dist/sound/{}.mp3", file.name))
+                .delete_object()
+                .set_bucket(GCS_BUCKET)
+                .set_object(format!("dist/sound/{}.mp3", file.name))
+                .send()
                 .await
                 .is_ok()
         {
