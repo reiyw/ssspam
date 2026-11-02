@@ -5440,7 +5440,7 @@ dependencies = [
 [[package]]
 name = "songbird"
 version = "0.5.0"
-source = "git+https://github.com/reiyw/songbird?branch=current#04ba01e7cb989c66acc4ed6158cbeeb886708f85"
+source = "git+https://github.com/reiyw/songbird?branch=current#bd73a46cf40ad3767b8dc93e39fedc976341baa1"
 dependencies = [
  "aead",
  "aes-gcm",
