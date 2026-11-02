@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use nom::{
-    Finish, IResult,
+    Finish, IResult, Parser,
     branch::alt,
     bytes::complete::{tag, take_till, take_while1},
     character::complete::{char, multispace0, u32},
@@ -148,35 +148,35 @@ enum SayArg {
 }
 
 fn speed(i: &str) -> IResult<&str, u32> {
-    ws(preceded(opt(char('@')), u32))(i)
+    ws(preceded(opt(char('@')), u32)).parse(i)
 }
 
 fn pitch(i: &str) -> IResult<&str, u32> {
-    ws(preceded(char('p'), u32))(i)
+    ws(preceded(char('p'), u32)).parse(i)
 }
 
 fn wait(i: &str) -> IResult<&str, f64> {
-    ws(preceded(char('w'), double))(i)
+    ws(preceded(char('w'), double)).parse(i)
 }
 
 fn start(i: &str) -> IResult<&str, f64> {
-    ws(preceded(char('s'), double))(i)
+    ws(preceded(char('s'), double)).parse(i)
 }
 
 fn duration(i: &str) -> IResult<&str, f64> {
-    ws(preceded(char('d'), double))(i)
+    ws(preceded(char('d'), double)).parse(i)
 }
 
 fn stop(i: &str) -> IResult<&str, &str> {
-    ws(alt((tag("stop"), tag("s"))))(i)
+    ws(alt((tag("stop"), tag("s")))).parse(i)
 }
 
 fn action(i: &str) -> IResult<&str, &str> {
-    ws(alt((tag(";"), tag("|"), eof)))(i)
+    ws(alt((tag(";"), tag("|"), eof))).parse(i)
 }
 
 fn audio_filter(i: &str) -> IResult<&str, &str> {
-    ws(preceded(tag("af="), take_till(|c| c == ';' || c == ' ')))(i)
+    ws(preceded(tag("af="), take_till(|c| c == ';' || c == ' '))).parse(i)
 }
 
 fn say_arg(input: &str) -> IResult<&str, SayArg> {
@@ -188,23 +188,26 @@ fn say_arg(input: &str) -> IResult<&str, SayArg> {
         map(duration, |n| SayArg::Duration((n * 1000.0) as u32)),
         map(stop, |_| SayArg::Stop),
         map(audio_filter, |af| SayArg::AudioFilter(af.to_owned())),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn sound_name(input: &str) -> IResult<&str, &str> {
     ws(take_while1(|c: char| {
         c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '^' || c == '!' || c == '.'
-    }))(input)
+    }))
+    .parse(input)
 }
 
 fn say_command(input: &str) -> IResult<&str, SayCommand> {
-    let (input, (name, opts)) = pair(sound_name, many0(say_arg))(input)?;
+    let (input, (name, opts)) = pair(sound_name, many0(say_arg)).parse(input)?;
     let (input, action) = map(action, |c| match c {
         ";" => Action::Synthesize,
         "|" => Action::Concat,
         "" => Action::Synthesize,
         _ => unreachable!(),
-    })(input)?;
+    })
+    .parse(input)?;
 
     let mut saycmd = SayCommand {
         name: name.to_string(),
@@ -228,14 +231,14 @@ fn say_command(input: &str) -> IResult<&str, SayCommand> {
 }
 
 fn say_commands(input: &str) -> IResult<&str, Vec<SayCommand>> {
-    many1(say_command)(input)
+    many1(say_command).parse(input)
 }
 
 /// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
 /// trailing whitespace, returning the output of `inner`.
-fn ws<'a, F, O, E: ParseError<&'a str>>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+fn ws<'a, F, O, E: ParseError<&'a str>>(inner: F) -> impl Parser<&'a str, Output = O, Error = E>
 where
-    F: 'a + (FnMut(&'a str) -> IResult<&'a str, O, E>),
+    F: Parser<&'a str, Output = O, Error = E>,
 {
     delimited(multispace0, inner, multispace0)
 }

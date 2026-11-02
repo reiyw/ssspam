@@ -6,9 +6,12 @@ use std::{
 
 use clap::Parser;
 use dotenvy::dotenv;
-use opentelemetry::KeyValue;
+use opentelemetry::{global, trace::TracerProvider as _};
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{Resource, trace::Tracer};
+use opentelemetry_sdk::{
+    Resource,
+    trace::{SdkTracer, SdkTracerProvider},
+};
 use serenity::{
     async_trait,
     client::{Client, Context, EventHandler},
@@ -70,21 +73,19 @@ impl EventHandler for Handler {
     }
 }
 
-fn init_tracer(otlp_endpoint: String) -> Tracer {
-    let otlp_exporter = opentelemetry_otlp::new_exporter()
-        .tonic()
-        .with_endpoint(otlp_endpoint);
-    opentelemetry_otlp::new_pipeline()
-        .tracing()
-        .with_exporter(otlp_exporter)
-        .with_trace_config(
-            opentelemetry_sdk::trace::config().with_resource(Resource::new(vec![KeyValue::new(
-                opentelemetry_semantic_conventions::resource::SERVICE_NAME,
-                "ssspambot",
-            )])),
-        )
-        .install_simple()
-        .expect("Failed to install opentelemetry pipeline")
+fn init_tracer(otlp_endpoint: String) -> SdkTracer {
+    let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint(otlp_endpoint)
+        .build()
+        .expect("Failed to build OTLP span exporter");
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(otlp_exporter)
+        .with_resource(Resource::builder().with_service_name("ssspambot").build())
+        .build();
+    let tracer = provider.tracer("ssspambot");
+    global::set_tracer_provider(provider);
+    tracer
 }
 
 fn init_tracing_subscriber(otlp_endpoint: String) {

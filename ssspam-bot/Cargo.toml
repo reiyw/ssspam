@@ -7,49 +7,48 @@ default-run = "ssspam-bot"
 
 [dependencies]
 anyhow = "1.0.64"
-async_zip = { version = "0.0.11", features = ["deflate"] }
+async_zip = { version = "0.0.19", features = ["deflate"] }
 bytes = "1.10.1"
 charset-normalizer-rs = "1.0.6"
 chrono = "0.4.22"
 clap = { version = "4.1.4", features = ["derive", "env"] }
-counter = "0.5.6"
+counter = "0.7.1"
 csv = "1.1.6"
 dashmap = { version = "6.1.0", features = ["serde"] }
-derive_builder = "0.11.2"
+derive_builder = "0.20.2"
 dotenvy = "0.15.6"
 encoding_rs = "0.8.33"
 glob = "0.3.0"
 google-cloud-storage = "1.21.0"
 humantime = "2.1.0"
-itertools = "0.10.5"
-maud = "0.23.0"
-mp3-metadata = "0.3.4"
-nom = "7.1.1"
-notify = { version = "5.0.0", default-features = false, features = ["macos_kqueue"] }
-opentelemetry = "0.21.0"
-opentelemetry_sdk = "0.21.2"
-opentelemetry-otlp = "0.14.0"
-opentelemetry-semantic-conventions = "0.13.0"
+itertools = "0.15.0"
+maud = "0.27.0"
+mp3-metadata = "0.4.0"
+nom = "8.0.0"
+notify = { version = "8.2.1", default-features = false, features = ["macos_kqueue"] }
+opentelemetry = "0.33.1"
+opentelemetry_sdk = "0.33.1"
+opentelemetry-otlp = { version = "0.33.1", default-features = false, features = ["grpc-tonic", "trace"] }
 pickledb = "0.5.1"
 poise = "0.6.1"
 prettytable-rs = "0.10.0"
-prost = "0.12.3"
-prost-types = "0.12.3"
-quick_cache = "0.6.9"
-rand = "0.8.5"
+prost = "0.14.4"
+prost-types = "0.14.4"
+quick_cache = "0.7.0"
+rand = "0.10.3"
 rhai = "1.12.0"
-rhai-rand = "0.1.4"
+rhai-rand = "0.2.0"
 rustls = { version = "0.23.37", default-features = false, features = ["aws_lc_rs", "std"] }
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
 serenity = { version = "0.12.2", features = ["voice"] }
 songbird = { git = "https://github.com/reiyw/songbird", branch = "current", features = ["builtin-queue"] }
 ssspam-proto = { path = "../ssspam-proto" }
-strsim = "0.10.0"
+strsim = "0.11.1"
 symphonia = { version = "0.5.4", features = ["pcm", "wav"] }
 systemstat = "0.2.3"
 tempfile = "3.3.0"
 tokio = { version = "1.21.0", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.40"
-tracing-opentelemetry = "0.22.0"
+tracing-opentelemetry = "0.34.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

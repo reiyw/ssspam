@@ -1,7 +1,9 @@
 use std::{collections::HashSet, fs, path::PathBuf, str::FromStr, time::Duration};
 
 use anyhow::Context as _;
-use async_zip::read::mem::ZipFileReader;
+// TODO: Migrate to `async_zip::base::read1` once it matures; `read::mem` is deprecated.
+#[allow(deprecated)]
+use async_zip::base::read::mem::ZipFileReader;
 use chrono::{DateTime, Utc};
 use google_cloud_storage::client::{Storage, StorageControl};
 use itertools::Itertools;
@@ -441,12 +443,13 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
         let content = attachment.download().await?;
 
         if attachment.filename.ends_with(".zip") {
+            #[allow(deprecated)]
             let reader = ZipFileReader::new(content).await?;
             for i in 0..reader.file().entries().len() {
-                let entry = reader.file().entries().get(i).unwrap().entry();
-                let mut entry_reader = reader.entry(i).await?;
+                let entry = &reader.file().entries()[i];
+                let filename = entry.filename().as_str()?;
 
-                if entry.dir() || !entry.filename().ends_with(".mp3") {
+                if entry.dir()? || !filename.ends_with(".mp3") {
                     continue;
                 }
 
@@ -454,9 +457,14 @@ pub async fn upload(ctx: Context<'_>, files: Vec<Attachment>) -> anyhow::Result<
                     .read()
                     .unwrap()
                     .dir
-                    .join(PathBuf::from(entry.filename()).file_name().unwrap());
-                let mut writer = tokio::fs::File::create(&out_path).await?;
-                tokio::io::copy(&mut entry_reader, &mut writer).await?;
+                    .join(PathBuf::from(filename).file_name().unwrap());
+                let mut data = vec![];
+                reader
+                    .reader_with_entry(i)
+                    .await?
+                    .read_to_end_checked(&mut data)
+                    .await?;
+                tokio::fs::write(&out_path, &data).await?;
                 count += 1;
 
                 let mut file = tokio::fs::File::open(&out_path).await?;

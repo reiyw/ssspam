@@ -15,7 +15,7 @@ use notify::{
     Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
     event::{CreateKind, ModifyKind, RenameMode},
 };
-use rand::{SeedableRng, rngs::StdRng, seq::IteratorRandom};
+use rand::seq::IteratorRandom;
 use serenity::prelude::TypeMapKey;
 use tokio::{runtime::Handle, sync::mpsc};
 use tracing::{info, warn};
@@ -239,8 +239,7 @@ impl SoundStorage {
     }
 
     pub fn get_random(&self) -> Option<SoundFile> {
-        let mut rng: StdRng = SeedableRng::from_entropy();
-        self.sounds.values().choose(&mut rng).cloned()
+        self.sounds.values().choose(&mut rand::rng()).cloned()
     }
 
     pub fn calc_similarities(&self, query: impl AsRef<str>) -> Vec<(f64, SoundFile)> {
