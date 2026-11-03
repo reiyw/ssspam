@@ -399,7 +399,7 @@ def bot_play_ms(sample_ms: int, speed: int, d_ms: int | None) -> int:
 
 def build_cmds(notes: list[Note], args, sample_ms: int, m0: float) -> list[list[Cmd]]:
     grid = args.grid
-    q = lambda sec: int(round(sec * 1000 / grid)) * grid  # noqa: E731
+    q = lambda sec: round(sec * 1000 / grid) * grid
     groups = group_onsets(notes)
     onsets = [q(g[0].start) for g in groups]
     out: list[list[Cmd]] = []
@@ -501,7 +501,7 @@ def split_messages(groups: list[list[Cmd]], args, sample_ms: int) -> list[Render
 
 def rust_f64(x: float) -> str:
     s = repr(x)
-    return s[:-2] if s.endswith(".0") else s
+    return s.removesuffix(".0")
 
 
 class BotDecoder:
@@ -595,7 +595,7 @@ def load_score(args) -> list[Note]:
 
 
 def cmd_gen(args) -> None:
-    sr, _, dur = probe(args.sample)
+    _, _, dur = probe(args.sample)
     sample_ms = int(dur * 1000)
     f0 = args.f0 or analyze_samples(decode_mono(args.sample)).f0
     m0 = hz_to_midi(f0)

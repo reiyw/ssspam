@@ -18,7 +18,7 @@ Workspace crates:
 cargo build
 cargo test                                   # what CI runs (stable toolchain)
 cargo test -p ssspam-bot sslang::test::test_parse_single_command_with_options   # single test
-just lint   # nightly clippy (-D clippy::all -W clippy::nursery) + nightly fmt check + hadolint
+just lint   # nightly clippy (-D clippy::all -W clippy::nursery) + nightly fmt check
 just fix    # apply clippy fixes and format
 cargo run --bin ssspam-bot                   # reads config from env / .env
 ```
@@ -48,6 +48,21 @@ Tests use the fixture MP3s in `tests/sound/` (referenced via `CARGO_MANIFEST_DIR
 
 `songbird` is pulled from a fork (`github.com/reiyw/songbird`, branch `current`), not crates.io.
 
+## Where this is developed
+
+ssspam is developed in a private monorepo, as its `projects/ssspam/`, and exported from there to the public repository github.com/reiyw/ssspam by Copybara: one commit there per monorepo commit, and commits made in the public repository directly are overwritten by the next export. The export leaves out the monorepo's files: the Bazel `BUILD.bazel` files and the deployment (`k8s/`, `skaffold.yaml`).
+
+In the monorepo, Bazel builds the same workspace from the same `Cargo.lock` (its `@ssspam_crates`), so keep the cargo build working too:
+
+```sh
+bazel build //projects/ssspam/...
+bazel test //projects/ssspam/...
+```
+
+- A crate's dependencies come from its `Cargo.toml` (`all_crate_deps`); after changing them, update `Cargo.lock` with cargo and the BUILD files only when targets change (a new binary, a new crate).
+- libopus is Bazel's (the monorepo's `MODULE.bazel` annotates `libopus_sys`), not the system's; `ssspam-proto/build.rs` runs with Bazel's `protoc`.
+- The BUILD targets are tagged `norustfmt`: this directory's `rustfmt.toml` (nightly `cargo fmt`) formats them, not the monorepo's.
+
 ## Deployment
 
-Pushes to `main` build and push the Docker image `reiyw/ssspam:latest` (multi-stage `cargo-chef` build; the runtime image bundles a static ffmpeg). Tags `v*` create a GitHub release with the `ssspam-bot` Linux binary.
+The monorepo builds the image (`//projects/ssspam/ssspam-bot:ssspam-bot_image`: the bot linked against the glibc of its Debian 13 base, plus static ffmpeg and ffprobe) and deploys it to its k3s cluster with `skaffold run`. Tags `v*` create a GitHub release with the `ssspam-bot` Linux binary.
