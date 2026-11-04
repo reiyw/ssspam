@@ -5313,7 +5313,8 @@ dependencies = [
 [[package]]
 name = "songbird"
 version = "0.6.1"
-source = "git+https://github.com/reiyw/songbird?branch=current#6bc2f7f701f7f2acdd425c398018958591985fac"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "371362adce10df3244fbf93475ac53391aedd425482f160a9dbb3e042577de8b"
 dependencies = [
  "aead",
  "aes-gcm",

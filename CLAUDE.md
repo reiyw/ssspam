@@ -46,7 +46,7 @@ Tests use the fixture MP3s in `tests/sound/` (referenced via `CARGO_MANIFEST_DIR
 
 **Prefix commands** live in `command.rs` as `poise` commands and must also be registered in the `commands` vec in `main.rs`. Owner-only commands (`upload`, `delete`) use the owner IDs hardcoded in `main.rs`. `upload`/`delete` also mirror sound files to the Google Cloud Storage bucket `surfpvparena` (`dist/sound/…`) and regenerate `dist/sounds.bin` (`web.rs`), which backs the external sound-list viewer. `restart` just exits with code 1 and relies on the container being restarted.
 
-`songbird` is pulled from a fork (`github.com/reiyw/songbird`, branch `current`), not crates.io.
+`songbird` is crates.io's 0.6.1, with ssspam's changes in `patches/songbird.patch` (its own clipping of the mixed audio, at its `Config::clip_threshold`, 0.01 by default, and a fix to the RTP timestamp of a parked mixer). Only the monorepo's Bazel build applies the patch; cargo cannot, so a cargo build, including the public repository's releases, has upstream songbird.
 
 ## Where this is developed
 
@@ -60,6 +60,7 @@ bazel test //projects/ssspam/...
 ```
 
 - A crate's dependencies come from its `Cargo.toml` (`all_crate_deps`); after changing them, update `Cargo.lock` with cargo and the BUILD files only when targets change (a new binary, a new crate).
+- `patches/songbird.patch` is applied to songbird by a `crate.annotation` in `MODULE.bazel`. To change it, edit the unpacked crate (`songbird-0.6.1.crate` from crates.io) and regenerate the patch with `diff -ruN` or `git diff` (`-p1`, paths from the crate root); after a songbird bump, check it still applies.
 - libopus is Bazel's (the monorepo's `MODULE.bazel` annotates `libopus_sys`), not the system's; `ssspam-proto/build.rs` runs with Bazel's `protoc`.
 - The BUILD targets are tagged `norustfmt`: this directory's `rustfmt.toml` (nightly `cargo fmt`) formats them, not the monorepo's.
 

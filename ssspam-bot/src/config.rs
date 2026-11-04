@@ -33,27 +33,6 @@ impl Configs {
         Ok(Self { db })
     }
 
-    pub fn get_clip_threshold(&self) -> f32 {
-        self.db.get::<f32>("global.clip_threshold").unwrap_or(0.01)
-    }
-
-    // TODO: Generic values
-    pub fn set_clip_threshold(&mut self, value: &str) -> anyhow::Result<()> {
-        self.db
-            .set("global.clip_threshold", &value.parse::<f32>()?)
-            .context("Failed to set clip_threshold")
-    }
-
-    pub fn get_sharpness(&self) -> f32 {
-        self.db.get::<f32>("global.sharpness").unwrap_or(250.0)
-    }
-
-    pub fn set_sharpness(&mut self, value: &str) -> anyhow::Result<()> {
-        self.db
-            .set("global.sharpness", &value.parse::<f32>()?)
-            .context("Failed to set sharpness")
-    }
-
     pub fn get_joinsound(&self, user_id: &UserId) -> Option<String> {
         self.db
             .get::<String>(&format!("users.u{user_id}.joinsound"))
@@ -90,8 +69,6 @@ impl Configs {
 
     pub fn get(&self, _guild_id: &GuildId, key: &str, user_id: &UserId) -> Option<String> {
         match key {
-            "clip_threshold" => Some(self.get_clip_threshold().to_string()),
-            "sharpness" => Some(self.get_sharpness().to_string()),
             "joinsound" => self.get_joinsound(user_id),
             "leavesound" => self.get_leavesound(user_id),
             _ => None,
@@ -106,8 +83,6 @@ impl Configs {
         user_id: &UserId,
     ) -> anyhow::Result<()> {
         match key {
-            "clip_threshold" => self.set_clip_threshold(value),
-            "sharpness" => self.set_sharpness(value),
             "joinsound" => self.set_joinsound(user_id, value),
             "leavesound" => self.set_leavesound(user_id, value),
             _ => bail!("Unrecognized key"),

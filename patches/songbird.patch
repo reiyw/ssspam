@@ -1,0 +1,92 @@
+Changes to songbird 0.6.1 from crates.io, for ssspam. Bazel applies them (the monorepo's
+MODULE.bazel, crate.annotation); cargo does not, so a cargo build has upstream songbird.
+
+- Mixed audio is soft-clipped by a softplus curve and then hard-clipped at Config::clip_threshold,
+  instead of upstream's softclip.
+- Live::add_task: a mixer parked after its activation time no longer stops the RTP timestamp.
+
+diff --git a/src/config.rs b/src/config.rs
+index 9674874e..329baf2f 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -150,6 +150,14 @@ pub struct Config {
+     /// [soft-clipped]: https://opus-codec.org/docs/opus_api-1.3.1/group__opus__decoder.html#gaff99598b352e8939dded08d96e125e0b
+     pub use_softclip: bool,
+ 
++    #[cfg(feature = "driver")]
++    /// Threshold value used to hard-clip mixed audio.
++    pub clip_threshold: f32,
++
++    #[cfg(feature = "driver")]
++    /// Sharpness of the clipping function.
++    pub clip_sharpness: f32,
++
+     #[cfg(feature = "driver")]
+     /// Configures the maximum amount of time to wait for an attempted voice
+     /// connection to Discord.
+@@ -226,6 +234,10 @@ impl Default for Config {
+             #[cfg(feature = "driver")]
+             use_softclip: true,
+             #[cfg(feature = "driver")]
++            clip_threshold: 0.01,
++            #[cfg(feature = "driver")]
++            clip_sharpness: 250.0,
++            #[cfg(feature = "driver")]
+             driver_retry: Retry::default(),
+             #[cfg(feature = "driver")]
+             driver_timeout: Some(Duration::from_secs(10).into()),
+diff --git a/src/driver/scheduler/live.rs b/src/driver/scheduler/live.rs
+index 4efcd710..0f6aa1ee 100644
+--- a/src/driver/scheduler/live.rs
++++ b/src/driver/scheduler/live.rs
+@@ -495,7 +495,7 @@ impl Live {
+     fn add_task(&mut self, task: ParkedMixer, id: TaskId, activation_time: Instant) {
+         let idx = self.ids.len();
+ 
+-        let elapsed = task.park_time - activation_time;
++        let elapsed = activation_time.saturating_duration_since(task.park_time);
+ 
+         let samples_f64 = elapsed.as_secs_f64() * (SAMPLE_RATE_RAW as f64);
+         let mod_samples = (samples_f64 as u64) as u32;
+diff --git a/src/driver/tasks/mixer/mod.rs b/src/driver/tasks/mixer/mod.rs
+index 25f25997..ecc298ac 100644
+--- a/src/driver/tasks/mixer/mod.rs
++++ b/src/driver/tasks/mixer/mod.rs
+@@ -564,10 +564,18 @@ impl Mixer {
+ 
+             if let MixType::MixedPcm(n) = mix_len {
+                 if self.config.use_softclip {
+-                    self.soft_clip.apply(
++                    soft_clip(
+                         &mut self.sample_buffer.samples_mut()
+                             [..n * self.config.mix_mode.channels()],
++                        self.config.clip_threshold,
++                        self.config.clip_sharpness,
+                     );
++                    for v in (self.sample_buffer.samples_mut()
++                        [..n * self.config.mix_mode.channels()])
++                        .iter_mut()
++                    {
++                        *v = v.clamp(-self.config.clip_threshold, self.config.clip_threshold);
++                    }
+                 }
+             }
+         }
+@@ -882,3 +890,17 @@ impl Mixer {
+         MixType::MixedPcm(len)
+     }
+ }
++
++#[inline]
++fn soft_clip(buf: &mut [f32], clip_threshold: f32, sharpness: f32) {
++    for x in buf.iter_mut() {
++        *x += (soft_plus(-sharpness * (*x + clip_threshold))
++            - soft_plus(sharpness * (*x - clip_threshold)))
++            / sharpness;
++    }
++}
++
++#[inline]
++fn soft_plus(x: f32) -> f32 {
++    (1.0 + (-x.abs()).exp()).ln() + x.max(0.0)
++}
