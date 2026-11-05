@@ -6,6 +6,8 @@ edition.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Used only by the code build.rs generates from ss.proto (src/lib.rs includes it): prost-types for its
+# google.protobuf.Duration and Timestamp.
 prost = "0.14.4"
 prost-types = "0.14.4"
 

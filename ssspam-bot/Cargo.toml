@@ -45,6 +45,8 @@ serenity = { version = "0.12.2", features = ["voice"] }
 songbird = { version = "0.6.1", features = ["builtin-queue"] }
 ssspam-proto = { path = "../ssspam-proto" }
 strsim = "0.11.1"
+# Not used directly: songbird decodes with symphonia, and these are the formats it must read. play.rs
+# hands it ffmpeg's output as WAV (PCM), which songbird's own features leave out.
 symphonia = { version = "0.5.4", features = ["pcm", "wav"] }
 systemstat = "0.2.3"
 tempfile = "3.3.0"
