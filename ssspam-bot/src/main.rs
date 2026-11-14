@@ -24,6 +24,7 @@ use ssspam_bot::{
     command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
     process_message, sound::watch_sound_storage,
 };
+use tokio::signal::unix::{SignalKind, signal};
 use tracing::{info, warn};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
@@ -199,10 +200,14 @@ async fn main() -> anyhow::Result<()> {
 
     let shard_manager = client.shard_manager.clone();
 
+    // SIGTERM is how a container is stopped. The bot is its PID 1, and the kernel gives PID 1 only
+    // the signals it handles: without this, stopping it waits until it is killed.
+    let mut terminate = signal(SignalKind::terminate())?;
     #[allow(clippy::redundant_pub_crate)]
     tokio::spawn(async move {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {},
+            _ = terminate.recv() => {},
         }
         shard_manager.shutdown_all().await;
     });
