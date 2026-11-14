@@ -189,7 +189,8 @@ async fn main() -> anyhow::Result<()> {
 
         data.insert::<ChannelUserManager>(Arc::new(ChannelUserManager::default()));
 
-        data.insert::<SaySoundCache>(Arc::new(SaySoundCache::new(50)));
+        // Each holds up to 180 s of decoded 48 kHz f32 audio, 69 MB in stereo.
+        data.insert::<SaySoundCache>(Arc::new(SaySoundCache::new(5)));
 
         data.insert::<GuildBroadcast>(Arc::new(Mutex::new(GuildBroadcast::new())));
 
