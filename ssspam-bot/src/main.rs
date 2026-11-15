@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    io::IsTerminal,
     path::PathBuf,
     sync::{Arc, Mutex, RwLock},
 };
@@ -21,8 +22,12 @@ use serenity::{
 use songbird::{self, SerenityInit};
 use ssspam_bot::{
     ChannelManager, Configs, GuildBroadcast, SaySoundCache, SoundStorage, command,
-    command::play_join_or_leave_sound, core::ChannelUserManager, leave_voice_channel,
-    process_message, sound::watch_sound_storage,
+    command::play_join_or_leave_sound,
+    core::ChannelUserManager,
+    leave_voice_channel,
+    play::keep_warm,
+    process_message,
+    sound::{preload_metadata, watch_sound_storage},
 };
 use tokio::signal::unix::{SignalKind, signal};
 use tracing::{info, warn};
@@ -89,11 +94,14 @@ fn init_tracer(otlp_endpoint: String) -> SdkTracer {
     tracer
 }
 
-fn init_tracing_subscriber(otlp_endpoint: String) {
+/// Logs to stdout what `RUST_LOG` lets through, and also exports it to `otlp_endpoint` if one is
+/// given.
+fn init_tracing_subscriber(otlp_endpoint: Option<String>) {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        // Colored only on a terminal, not in the container's log.
+        .with(tracing_subscriber::fmt::layer().with_ansi(std::io::stdout().is_terminal()))
         .with(EnvFilter::from_default_env())
-        .with(OpenTelemetryLayer::new(init_tracer(otlp_endpoint)))
+        .with(otlp_endpoint.map(|endpoint| OpenTelemetryLayer::new(init_tracer(endpoint))))
         .init();
 }
 
@@ -128,9 +136,7 @@ async fn main() -> anyhow::Result<()> {
 
     let opt = Opt::parse();
 
-    if let Some(endpoint) = opt.otlp_endpoint {
-        init_tracing_subscriber(endpoint);
-    }
+    init_tracing_subscriber(opt.otlp_endpoint);
 
     let framework = poise::Framework::builder()
         .setup(|_, _, _: &poise::Framework<(), anyhow::Error>| Box::pin(async move { Ok(()) }))
@@ -182,6 +188,11 @@ async fn main() -> anyhow::Result<()> {
 
         let storage = Arc::new(RwLock::new(SoundStorage::load(&opt.sound_dir)));
         tokio::spawn(watch_sound_storage(Arc::clone(&storage)));
+        tokio::task::spawn_blocking({
+            let storage = Arc::clone(&storage);
+            move || preload_metadata(&storage)
+        });
+        tokio::spawn(keep_warm(Arc::clone(&storage)));
         data.insert::<SoundStorage>(storage);
 
         data.insert::<ChannelManager>(Arc::new(ChannelManager::load_or_new(
@@ -190,8 +201,9 @@ async fn main() -> anyhow::Result<()> {
 
         data.insert::<ChannelUserManager>(Arc::new(ChannelUserManager::default()));
 
-        // Each holds up to 180 s of decoded 48 kHz f32 audio, 69 MB in stereo.
-        data.insert::<SaySoundCache>(Arc::new(SaySoundCache::new(5)));
+        // Decoded 48 kHz f32 audio takes 384 KB a second in stereo: 64 MB holds about 55 sounds of
+        // the average 2.9 s, while one slowed down to 180 s (69 MB) is not kept.
+        data.insert::<SaySoundCache>(Arc::new(SaySoundCache::new(64 * 1024 * 1024)));
 
         data.insert::<GuildBroadcast>(Arc::new(Mutex::new(GuildBroadcast::new())));
 

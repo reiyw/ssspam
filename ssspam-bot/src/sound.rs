@@ -4,7 +4,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::{Arc, OnceLock, RwLock},
-    time::{Duration, SystemTime},
+    time::{Duration, Instant, SystemTime},
 };
 
 use anyhow::Context as _;
@@ -94,8 +94,10 @@ pub struct SoundFile {
 
     // Retrieving metadata requires file parsing and is time consuming. For most
     // files, metadata is not needed immediately, so wrap in OnceLock to delay
-    // metadata retrieval.
-    metadata: OnceLock<Metadata>,
+    // metadata retrieval. The Arc shares it between the clones that
+    // SoundStorage::get hands out and the SoundFile in the storage, so that it is
+    // parsed once, not once a clone.
+    metadata: Arc<OnceLock<Metadata>>,
 }
 
 impl SoundFile {
@@ -104,7 +106,7 @@ impl SoundFile {
         Self {
             name: path.as_ref().file_stem().unwrap().to_string_lossy().into(),
             path: path.as_ref().into(),
-            metadata: OnceLock::new(),
+            metadata: Arc::default(),
         }
     }
 
@@ -120,8 +122,17 @@ impl SoundFile {
                 .to_string_lossy()
                 .into(),
             path: path.as_ref().into(),
-            metadata: Metadata::load(path.as_ref())?.into(),
+            metadata: Arc::new(Metadata::load(path.as_ref())?.into()),
         })
+    }
+
+    /// Parses the metadata now, unless it has been already, rather than when it is first asked for.
+    fn preload_metadata(&self) -> anyhow::Result<()> {
+        if self.metadata.get().is_none() {
+            // Another thread may have set it meanwhile: then both have parsed the same file.
+            self.metadata.set(Metadata::load(&self.path)?).ok();
+        }
+        Ok(())
     }
 
     pub fn sample_rate_hz(&self) -> u32 {
@@ -262,6 +273,26 @@ impl SoundStorage {
     }
 }
 
+/// Parses the metadata of every sound in the storage.
+///
+/// Decoding a sound needs its duration, sample rate and channel count: parsed here, they need not be
+/// parsed when the sound is first played. Blocks the thread, but not the storage, for as long as
+/// that takes.
+pub fn preload_metadata(storage: &RwLock<SoundStorage>) {
+    let files: Vec<_> = storage.read().unwrap().files().cloned().collect();
+    let started = Instant::now();
+    for file in &files {
+        if let Err(e) = file.preload_metadata() {
+            warn!("Failed to load the metadata of {:?}: {e:?}", file.path);
+        }
+    }
+    info!(
+        "Loaded the metadata of {} sounds in {:?}",
+        files.len(),
+        started.elapsed()
+    );
+}
+
 #[allow(clippy::cognitive_complexity)]
 pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
     let (tx, mut rx) = mpsc::channel(1);
@@ -282,7 +313,10 @@ pub async fn watch_sound_storage(storage: Arc<RwLock<SoundStorage>>) {
     }
 
     while let Some(Ok(event)) = rx.recv().await {
-        if event.paths[0].extension() != Some(OsStr::new("mp3")) {
+        // Every ffmpeg and every metadata parse opens a sound: those change nothing.
+        if event.paths[0].extension() != Some(OsStr::new("mp3"))
+            || matches!(event.kind, EventKind::Access(_))
+        {
             continue;
         }
         info!("Event in the sound directory: {event:?}");

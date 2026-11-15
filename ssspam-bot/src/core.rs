@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
     str::FromStr,
     sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::Context as _;
@@ -22,7 +23,7 @@ use tokio::sync::{
     broadcast,
     broadcast::{Receiver, Sender},
 };
-use tracing::Instrument;
+use tracing::{Instrument, info};
 
 use crate::{SayCommands, play_say_commands};
 
@@ -225,6 +226,8 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
         saycmds
     };
 
+    info!(delivery_ms = delivery_delay_ms(msg), "Say sounds requested");
+
     let guild_broadcast = ctx
         .data
         .read()
@@ -244,6 +247,17 @@ pub async fn process_message(ctx: &Context, msg: &Message) -> anyhow::Result<()>
             }
         } => Ok(())
     }
+}
+
+/// Milliseconds from when Discord received the message, the time in its ID, to now: how long it has
+/// taken to reach the bot, give or take the difference between Discord's clock and the host's.
+fn delivery_delay_ms(msg: &Message) -> i64 {
+    const DISCORD_EPOCH_MS: u64 = 1_420_070_400_000;
+    let sent_ms = (msg.id.get() >> 22) + DISCORD_EPOCH_MS;
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+    now_ms as i64 - sent_ms as i64
 }
 
 #[tracing::instrument]
